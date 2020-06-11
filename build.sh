@@ -1,5 +1,13 @@
 #!/bin/bash
 mkdir -p build
+if [! -d "./rabbitmq-c/build"]; then
+    (
+        cd rabbitmq-c
+        mkdir build
+        cd build
+        cmake -DENABLE_SSL_SUPPORT=OFF ..
+        cmake --build . --target install
+    )
 for puzzle in puzzle_specific/*; do
     puzzlename=${puzzle##*/}
     (
