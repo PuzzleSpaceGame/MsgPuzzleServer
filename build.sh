@@ -1,13 +1,15 @@
 #!/bin/bash
 mkdir -p build
-if [! -d "./rabbitmq-c/build"]; then
+if [ ! -d "./rabbitmq-c/build" ]; then
     (
-        cd rabbitmq-c
+        git submodule update --init --recursive
+    	cd rabbitmq-c
         mkdir build
         cd build
         cmake -DENABLE_SSL_SUPPORT=OFF ..
         cmake --build . --target install
     )
+fi
 for puzzle in puzzle_specific/*; do
     puzzlename=${puzzle##*/}
     (
