@@ -7,7 +7,7 @@
 #include <amqp_tcp_socket.h>
 #include "utils.h"
 
-#include <gmodule.h>
+#include <glib.h>
 
 #define CLASSNAME thegame.name
 
