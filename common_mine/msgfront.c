@@ -131,7 +131,7 @@ static void msg_draw_polygon(void *handle, int *coords, int npoints,
     int i = 0;
     int index = 0;
     index += sprintf(&str[index],"[%d,",coords[0]);
-    for(i=1;i<npoints,i++){
+    for(i=1;i<npoints;i++){
         index += sprintf(&str[index], ",%d", coords[i]);
     }
     index += sprintf(&str[index], "]");
@@ -189,12 +189,10 @@ static void msg_unclip(void *handle)
 
 static void msg_start_draw(void *handle)
 {
-    return;
 }
 
 static void msg_end_draw(void *handle)
 {
-    return:
 }
 
 static void msg_status_bar(void *handle, const char *text)
@@ -209,73 +207,61 @@ struct blitter {
 
 static blitter *msg_blitter_new(void *handle, int w, int h){    
     fatal("blitter func called");
-    return NULL;
 }
 
 static void msg_blitter_free(void *handle, blitter *bl)
 {
     fatal("blitter func called");
-    return;
 }
 static void msg_blitter_save(void *handle, blitter *bl, int x, int y)
 {
     fatal("blitter func called");
-    return;
 }
 
 static void msg_blitter_load(void *handle, blitter *bl, int x, int y)
 {
     fatal("blitter func called");
-    return;
 }
 
 static void msg_begin_doc(void *handle, int pages)
 {
     fatal("print func called");
-    return NULL;
 }
 
 static void msg_begin_page(void *handle, int number)
 {
     fatal("print func called");
-    return NULL;
 }
 
 static void msg_begin_puzzle(void *handle, float xm, float xc,
 			  float ym, float yc, int pw, int ph, float wmm)
 {
     fatal("print func called");
-    return NULL;
 }
 
 static void msg_end_puzzle(void *handle)
 {
     fatal("print func called");
-    return NULL;
 }
 
 static void msg_end_page(void *handle, int number)
 {
     fatal("print func called");
-    return NULL;
 }
 
 static void msg_end_doc(void *handle)
 {
     fatal("print func called");
-    return NULL;
 }
 
 static void msg_line_width(void *handle, float width)
 {
     fatal("print func called");
-    return NULL;
 }
 
 static void msg_line_dotted(void *handle, bool dotted)
 {
     fatal("print func called");
-    return NULL;
 }
 
 char *msg_text_fallback(void *handle, const char *const *strings, int nstrings)
