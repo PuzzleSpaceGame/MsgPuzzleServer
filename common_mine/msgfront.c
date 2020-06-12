@@ -524,7 +524,7 @@ int gameloop(void){
                 y = INT_MAX;
                 midend_size(me, &x, &y, false);
                 drawhandle = g_queue_new();
-                fe->dr = drawing_new(msg_drawing,me,drawinghandle);
+                fe->dr = drawing_new(msg_drawing,me,drawhandle);
                 g_queue_push_tail(drawhandle,"{draw:true,size: x: %d,\n y %d,\n discard:[{",x,y);
                 midend_force_redraw(me);
                 g_queue_push_tail(drawhandle,"}]}");
