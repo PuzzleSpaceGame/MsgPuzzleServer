@@ -447,7 +447,7 @@ static int fe_set_midend(frontend *fe, midend *me)
 }
 
 void write_to_STDOUT(void *ctx, const void *buf, int len){
-    printf("%s",buf);
+    printf("%s",(char *)buf);
 }
 
 void pipe_serialized(struct midend *me){
