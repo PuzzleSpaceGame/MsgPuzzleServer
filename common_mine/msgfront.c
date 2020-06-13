@@ -536,14 +536,14 @@ int gameloop(void){
                 g_queue_push_tail(drawhandle,g_strdup("{config:true,\nopts:[\n"));
                 i=0;
                 while(cfg[i].type != C_END){
-                    g_queue_push_tail(drawhandle,g_strdup_printf("{name:%s,\n",cfg[i]->name));
+                    g_queue_push_tail(drawhandle,g_strdup_printf("{name:%s,\n",cfg[i].name));
                     if(cfg[i].type == C_STRING){
                         g_queue_push_tail(drawhandle,g_strdup("type:string,\n"));
                     } else if(cfg[i].type == C_BOOLEAN){
                         g_queue_push_tail(drawhandle,g_strdup("type:boolean,\n"));
                     } else if(cfg[i].type == C_CHOICES){
                         g_queue_push_tail(drawhandle,"type:choices,\n");
-                        g_queue_push_tail(drawhandle,g_strdup_printf("choices:%s,\n",cfg[i]->u.choices.choicenames));
+                        g_queue_push_tail(drawhandle,g_strdup_printf("choices:%s,\n",cfg[i].u.choices.choicenames));
                     }
                     g_queue_push_tail(drawhandle,g_strdup("},\n"));
                 }
