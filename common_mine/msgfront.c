@@ -472,7 +472,7 @@ enum commands {
 
 int getserverstate(void){
     //TODO get message and decide on what state to be in
-    return SERVER_ERROR;
+    return SERVER_GET_CONFIG;
 }
 
 int gameloop(amqp_connection_state_t pwq_conn, amqp_connection_state_t adm_conn ){
@@ -527,7 +527,7 @@ int gameloop(amqp_connection_state_t pwq_conn, amqp_connection_state_t adm_conn 
                 g_queue_push_tail(drawhandle,g_strdup_printf("{draw:true,size: x: %d,\n y %d,\n discard:[{",x,y));
                 midend_force_redraw(me);
                 g_queue_push_tail(drawhandle,g_strdup("}]}"));
-                g_queue_free(drawhandle,g_free);
+                g_queue_free_full(drawhandle,g_free);
                 drawing_free(fe->dr);
                 break;
             case SERVER_GET_CONFIG:
@@ -542,13 +542,14 @@ int gameloop(amqp_connection_state_t pwq_conn, amqp_connection_state_t adm_conn 
                     } else if(cfg[i].type == C_BOOLEAN){
                         g_queue_push_tail(drawhandle,g_strdup("type:boolean,\n"));
                     } else if(cfg[i].type == C_CHOICES){
-                        g_queue_push_tail(drawhandle,"type:choices,\n");
+                        g_queue_push_tail(drawhandle,g_strdup("type:choices,\n"));
                         g_queue_push_tail(drawhandle,g_strdup_printf("choices:%s,\n",cfg[i].u.choices.choicenames));
                     }
                     g_queue_push_tail(drawhandle,g_strdup("},\n"));
                 }
                 g_queue_push_tail(drawhandle,g_strdup("]}"));
-                g_queue_free(drawhandle);
+                printf(queue_to_str(drawhandle));
+                g_queue_free_full(drawhandle,g_free);
                 free_cfg(cfg);
                 break;
             case SERVER_ECHO:
@@ -560,6 +561,18 @@ int gameloop(amqp_connection_state_t pwq_conn, amqp_connection_state_t adm_conn 
         }
     }
     return 0;
+}
+
+char * queue_to_str(GQueue *queue){
+    char **outstr = &g_strdup("");
+    g_queue_foreach(queue,qconcat,outstr);
+    return *outstr;
+}
+
+void qconcat(char *str, char **dest){
+    char * olddest = *dest;
+    *dest = g_strconcat(str,*dest,NULL);
+    g_free(olddest);
 }
 
 int main(int argc, char*argv[]){    
