@@ -527,7 +527,7 @@ int gameloop(amqp_connection_state_t pwq_conn, amqp_connection_state_t adm_conn 
                 g_queue_push_tail(drawhandle,g_strdup_printf("{draw:true,size: x: %d,\n y %d,\n discard:[{",x,y));
                 midend_force_redraw(me);
                 g_queue_push_tail(drawhandle,g_strdup("}]}"));
-                g_queue_free(drawhandle);
+                g_queue_free(drawhandle,g_free);
                 drawing_free(fe->dr);
                 break;
             case SERVER_GET_CONFIG:
