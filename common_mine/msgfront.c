@@ -460,6 +460,17 @@ bool read_serialized(void *ctx, void *buf, int len){
     return got == len;
 }
 
+char * queue_to_str(GQueue *queue){
+    char **outstr = &g_strdup("");
+    g_queue_foreach(queue,qconcat,outstr);
+    return *outstr;
+}
+
+void qconcat(char *str, char **dest){
+    char * olddest = *dest;
+    *dest = g_strconcat(str,*dest,NULL);
+    g_free(olddest);
+}
 enum commands {
     SERVER_ERROR,
     SERVER_KILL,
@@ -548,7 +559,7 @@ int gameloop(amqp_connection_state_t pwq_conn, amqp_connection_state_t adm_conn 
                     g_queue_push_tail(drawhandle,g_strdup("},\n"));
                 }
                 g_queue_push_tail(drawhandle,g_strdup("]}"));
-                printf(queue_to_str(drawhandle));
+                printf("%s\n",queue_to_str(drawhandle));
                 g_queue_free_full(drawhandle,g_free);
                 free_cfg(cfg);
                 break;
@@ -563,17 +574,6 @@ int gameloop(amqp_connection_state_t pwq_conn, amqp_connection_state_t adm_conn 
     return 0;
 }
 
-char * queue_to_str(GQueue *queue){
-    char **outstr = &g_strdup("");
-    g_queue_foreach(queue,qconcat,outstr);
-    return *outstr;
-}
-
-void qconcat(char *str, char **dest){
-    char * olddest = *dest;
-    *dest = g_strconcat(str,*dest,NULL);
-    g_free(olddest);
-}
 
 int main(int argc, char*argv[]){    
     //For Puzzle Work Queue
