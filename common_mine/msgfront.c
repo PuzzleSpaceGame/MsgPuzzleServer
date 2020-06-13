@@ -630,7 +630,7 @@ int main(int argc, char*argv[]){
             "Logging In to PWQ");
     amqp_channel_open(pwq_conn, 1);
     die_on_amqp_error(amqp_get_rpc_reply(pwq_conn), "Opening PWQ channel");
-    amqp_basic_consume(conn, 1, amqp_cstring_bytes(pwq_queuename), amqp_empty_bytes,
+    amqp_basic_consume(pwq_conn, 1, amqp_cstring_bytes(pwq_queuename), amqp_empty_bytes,
                                  0, 0, 0, amqp_empty_table);
     die_on_amqp_error(amqp_get_rpc_reply(pwq_conn), "Consuming PWQ");
 
@@ -645,7 +645,7 @@ int main(int argc, char*argv[]){
         die("opening PWQ TCP socket");
     }
 
-    die_in_amqp_error(amqp_login(adm_conn, "/", 0, 131072, 0,
+    die_on_amqp_error(amqp_login(adm_conn, "/", 0, 131072, 0,
                 AMQP_SASL_METHOD_PLAIN, adm_user, adm_pass),
             "Logging In to PWQ");
     amqp_channel_open(adm_conn, 1);
