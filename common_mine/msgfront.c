@@ -625,7 +625,7 @@ int main(int argc, char*argv[]){
         die("opening PWQ TCP socket");
     }
 
-    die_in_amqp_error(amqp_login(pwq_conn, "/", 0, 131072, 0,
+    die_on_amqp_error(amqp_login(pwq_conn, "/", 0, 131072, 0,
                 AMQP_SASL_METHOD_PLAIN, pwq_user, pwq_pass),
             "Logging In to PWQ");
     amqp_channel_open(pwq_conn, 1);
