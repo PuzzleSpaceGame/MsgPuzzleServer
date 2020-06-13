@@ -460,17 +460,17 @@ bool read_serialized(void *ctx, void *buf, int len){
     return got == len;
 }
 
+void qconcat(char *str, char **dest){
+    char * olddest = *dest;
+    *dest = g_strconcat(str,*dest,NULL);
+    g_free(olddest);
+}
 char * queue_to_str(GQueue *queue){
     char **outstr = &g_strdup("");
     g_queue_foreach(queue,qconcat,outstr);
     return *outstr;
 }
 
-void qconcat(char *str, char **dest){
-    char * olddest = *dest;
-    *dest = g_strconcat(str,*dest,NULL);
-    g_free(olddest);
-}
 enum commands {
     SERVER_ERROR,
     SERVER_KILL,
