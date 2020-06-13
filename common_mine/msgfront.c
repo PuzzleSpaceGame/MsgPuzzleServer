@@ -516,7 +516,6 @@ int gameloop(void){
                 midend_new_game(me);
                 break;
             case SERVER_UPDATE_GAME:
-                scanf("x: %d, y: %d, button: %d\n",&xi,&yi,&bi);
                 midend_process_key(me,xi,yi,bi);
                 break;
             case SERVER_REDRAW_GAME:
@@ -525,9 +524,9 @@ int gameloop(void){
                 midend_size(me, &x, &y, false);
                 drawhandle = g_queue_new();
                 fe->dr = drawing_new(&msg_drawing,me,drawhandle);
-                g_queue_push_tail(drawhandle,"{draw:true,size: x: %d,\n y %d,\n discard:[{",x,y);
+                g_queue_push_tail(drawhandle,g_strdup_printf("{draw:true,size: x: %d,\n y %d,\n discard:[{",x,y));
                 midend_force_redraw(me);
-                g_queue_push_tail(drawhandle,"}]}");
+                g_queue_push_tail(drawhandle,g_strdup("}]}"));
                 g_queue_free(drawhandle);
                 drawing_free(fe->dr);
                 break;
@@ -539,16 +538,16 @@ int gameloop(void){
                 while(cfg[i]->type != C_END){
                     g_queue_push_tail(drawhandle,g_strdup_printf("{name:%s,\n",cfg[i]->name));
                     if(cfg[i]->type == C_STRING){
-                        g_queue_push_tail(drawhandle,"type:string,\n");
+                        g_queue_push_tail(drawhandle,g_strdup("type:string,\n"));
                     } else if(cfg[i]->type == C_BOOLEAN){
-                        g_queue_push_tail(drawhandle,"type:boolean,\n");
+                        g_queue_push_tail(drawhandle,g_strdup("type:boolean,\n"));
                     } else if(cfg[i]->type == C_CHOICES){
                         g_queue_push_tail(drawhandle,"type:choices,\n");
                         g_queue_push_tail(drawhandle,g_strdup_printf("choices:%s,\n",cfg[i]->u.choices.choicenames));
                     }
-                    g_queue_push_tail(drawhandle,"},\n");
+                    g_queue_push_tail(drawhandle,g_strdup("},\n"));
                 }
-                g_queue_push_tail(drawhandle,"]}");
+                g_queue_push_tail(drawhandle,g_strdup("]}"));
                 g_queue_free(drawhandle);
                 free_cfg(cfg);
                 break;
