@@ -475,7 +475,7 @@ int getserverstate(void){
     return SERVER_ERROR;
 }
 
-int gameloop(void){
+int gameloop(amqp_connection_state_t pwq_conn amqp_connection_state_t adm_conn ){
     printf("SERVER STARTING\n");
     //Setup For this function
     bool keepgoing = true;
@@ -640,7 +640,7 @@ int main(int argc, char*argv[]){
     if (!adm_socket){
         die("creating PWQ TCP socket");
     }
-    adm_status = ampq_socket_open(adm_socket,adm_hostname,adm_port);
+    adm_status = amqp_socket_open(adm_socket,adm_hostname,adm_port);
     if (adm_status){
         die("opening PWQ TCP socket");
     }
@@ -650,7 +650,7 @@ int main(int argc, char*argv[]){
             "Logging In to PWQ");
     amqp_channel_open(adm_conn, 1);
     die_on_amqp_error(amqp_get_rpc_reply(adm_conn), "Opening PWQ channel");
-    amqp_basic_consume(conn, 1, amqp_cstring_bytes(adm_queuename), amqp_empty_bytes,
+    amqp_basic_consume(adm_conn, 1, amqp_cstring_bytes(adm_queuename), amqp_empty_bytes,
                                  0, 0, 0, amqp_empty_table);
     die_on_amqp_error(amqp_get_rpc_reply(adm_conn), "Consuming PWQ");
     
