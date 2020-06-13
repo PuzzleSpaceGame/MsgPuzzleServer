@@ -460,7 +460,7 @@ bool read_serialized(void *ctx, void *buf, int len){
     return got == len;
 }
 
-void qconcat(char *str, char **dest){
+void qconcat(void *str, void **dest){
     char * olddest = *dest;
     *dest = g_strconcat(str,*dest,NULL);
     g_free(olddest);
