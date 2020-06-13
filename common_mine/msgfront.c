@@ -533,7 +533,7 @@ int gameloop(void){
             case SERVER_GET_CONFIG:
                 cfg = midend_get_config(me,CFG_SETTINGS,garbage);
                 drawhandle = g_queue_new();
-                g_queue_push_tail("{config:true,\nopts:[\n");
+                g_queue_push_tail(drawhandle,g_strdup("{config:true,\nopts:[\n"));
                 i=0;
                 while(cfg[i]->type != C_END){
                     g_queue_push_tail(drawhandle,g_strdup_printf("{name:%s,\n",cfg[i]->name));
