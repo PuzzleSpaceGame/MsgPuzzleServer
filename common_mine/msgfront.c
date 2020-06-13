@@ -592,7 +592,7 @@ int main(int argc, char*argv[]){
 	amqp_connection_state_t adm_conn;
     //Handle Command Line Args
     if(argc % 2 != 1 || argc < 13){
-        fprintf(stderr,"Usage requires the following tagged args: -pwq_host, -pwq_port, -pwq_queue and their adm counterparts");
+        fprintf(stderr,"Usage requires the following tagged args: -pwq_host, -pwq_port, -pwq_queue and their adm counterparts\n");
         return 1;
     } 
     for(int i=1;i < argc;i+=2){
@@ -628,7 +628,7 @@ int main(int argc, char*argv[]){
             adm_pass = argv[i+1];
         }
     }
-    
+    printf("test\n");
     pwq_conn = amqp_new_connection();
     pwq_socket = amqp_tcp_socket_new(pwq_conn);
     if (!pwq_socket){
