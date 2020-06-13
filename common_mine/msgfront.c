@@ -593,6 +593,7 @@ int main(int argc, char*argv[]){
     //Handle Command Line Args
     if(argc % 2 != 1 || argc < 13){
         fprintf(stderr,"Usage requires the following tagged args: -pwq_host, -pwq_port, -pwq_queue and their adm counterparts");
+        return 1;
     } 
     for(int i=1;i < argc;i+=2){
         if(argv[i] == "-pwq_host"){
