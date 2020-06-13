@@ -466,7 +466,7 @@ void qconcat(void *str, void **dest){
     g_free(olddest);
 }
 char * queue_to_str(GQueue *queue){
-    char **outstr = &g_strdup("");
+    char **outstr = *g_strdup("");
     g_queue_foreach(queue,qconcat,outstr);
     return *outstr;
 }
