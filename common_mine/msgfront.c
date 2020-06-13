@@ -620,7 +620,7 @@ int main(int argc, char*argv[]){
     if (!pwq_socket){
         die("creating PWQ TCP socket");
     }
-    pwq_status = ampq_socket_open(pwq_socket,pwq_hostname,pwq_port);
+    pwq_status = amqp_socket_open(pwq_socket,pwq_hostname,pwq_port);
     if (pwq_status){
         die("opening PWQ TCP socket");
     }
