@@ -475,7 +475,7 @@ int getserverstate(void){
     return SERVER_ERROR;
 }
 
-int gameloop(amqp_connection_state_t pwq_conn amqp_connection_state_t adm_conn ){
+int gameloop(amqp_connection_state_t pwq_conn, amqp_connection_state_t adm_conn ){
     printf("SERVER STARTING\n");
     //Setup For this function
     bool keepgoing = true;
