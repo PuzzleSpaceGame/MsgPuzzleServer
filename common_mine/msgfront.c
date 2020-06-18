@@ -43,6 +43,7 @@ struct frontend {
     drawing *dr;
     int xmin, ymin;
     float puzz_scale;
+    GQueue * drawhandle;
 };
 
 void fatal(const char *fmt, ...){
@@ -84,12 +85,11 @@ static void msg_draw_text(void *handle, int x, int y, int fonttype,
 			  int fontsize, int align, int colour,
                           const char *text)
 {
-    printf("text\n");
-    GQueue * drawhandle = *(GQueue **)handle;
-    g_queue_push_tail(drawhandle,g_strdup_printf("{draw:text,\n" 
-            "x: %d,\n" 
-            "y: %d,\n" 
-            "fonttype: %d,\n"
+    frontend *fe = (frontend *)handle;
+    g_queue_push_tail(fe->drawhandle,g_strdup_printf("{\"draw\":\"text\",\n" 
+            "\"x\": %d,\n"
+            "\"y\": %d,\n" 
+            "\"fonttype\": %d,\n"
             "fontsize: %d,\n"
             "align: %d,\n"
             "colour: %d,\n"
@@ -99,10 +99,8 @@ static void msg_draw_text(void *handle, int x, int y, int fonttype,
 
 static void msg_draw_rect(void *handle, int x, int y, int w, int h, int colour)
 {
-    printf("rect\n");
-    GQueue * drawhandle = *(GQueue **)handle;
-    printf("a\n");
-    g_queue_push_tail(drawhandle,g_strdup_printf("{draw:rect,\n"
+    frontend *fe = (frontend *)handle;
+    g_queue_push_tail(fe->drawhandle,g_strdup_printf("{draw:rect,\n"
             "x: %d,\n"
             "y: %d,\n"
             "w: %d,\n"
@@ -110,14 +108,12 @@ static void msg_draw_rect(void *handle, int x, int y, int w, int h, int colour)
             "colour: %d},\n",
             x,y,w,h,colour));
 
-    printf("t\n");
 }
 
 static void msg_draw_line(void *handle, int x1, int y1, int x2, int y2, int colour)
 { 
-    printf("line\n");
-    GQueue * drawhandle = *(GQueue **)handle;
-    g_queue_push_tail(drawhandle,g_strdup_printf("{draw:line,\n"
+    frontend *fe = (frontend *)handle;
+    g_queue_push_tail(fe->drawhandle,g_strdup_printf("{draw:line,\n"
             "x1: %d,\n"
             "y1: %d,\n"
             "x2: %d,\n"
@@ -129,8 +125,7 @@ static void msg_draw_line(void *handle, int x1, int y1, int x2, int y2, int colo
 static void msg_draw_polygon(void *handle, int *coords, int npoints,
 		     int fillcolour, int outlinecolour)
 { 
-    printf("polygon\n");
-    GQueue * drawhandle = *(GQueue **)handle;
+    frontend *fe = (frontend *)handle;
     //convert coords array to string
     char str[128];
     int i = 0;
@@ -140,7 +135,7 @@ static void msg_draw_polygon(void *handle, int *coords, int npoints,
         index += sprintf(&str[index], ",%d", coords[i]);
     }
     index += sprintf(&str[index], "]");
-    g_queue_push_tail(drawhandle,g_strdup_printf(
+    g_queue_push_tail(fe->drawhandle,g_strdup_printf(
                 "{draw:polygon,\n"
                 "coords: %s,\n"
                 "npoints: %d,\n"
@@ -152,8 +147,8 @@ static void msg_draw_polygon(void *handle, int *coords, int npoints,
 static void msg_draw_circle(void *handle, int cx, int cy, int radius,
 			 int fillcolour, int outlinecolour)
 {
-    GQueue * drawhandle = *(GQueue **)handle;
-    g_queue_push_tail(drawhandle,g_strdup_printf("draw:circle,\n"
+    frontend *fe = (frontend *)handle;
+    g_queue_push_tail(fe->drawhandle,g_strdup_printf("draw:circle,\n"
             "cx: %d,\n"
             "cy: %d,\n"
             "radius: %d,\n"
@@ -164,9 +159,8 @@ static void msg_draw_circle(void *handle, int cx, int cy, int radius,
 
 static void msg_draw_update(void *handle, int x, int y, int w, int h)
 {
-    printf("update\n");
-    GQueue * drawhandle = *(GQueue **)handle;
-    g_queue_push_tail(drawhandle,g_strdup_printf("]},\ndraw_update:{\n"
+    frontend *fe = (frontend *)handle;
+    g_queue_push_tail(fe->drawhandle,g_strdup_printf("]},\ndraw_update:{\n"
             "x: %d,\n"
             "y: %d,\n"
             "w: %d,\n"
@@ -177,9 +171,8 @@ static void msg_draw_update(void *handle, int x, int y, int w, int h)
 
 static void msg_clip(void *handle, int x, int y, int w, int h)
 {
-    printf("clip\n");
-    GQueue * drawhandle = *(GQueue **)handle;
-    g_queue_push_tail(drawhandle,g_strdup_printf("clip:{\n"
+    frontend *fe = (frontend *)handle;
+    g_queue_push_tail(fe->drawhandle,g_strdup_printf("clip:{\n"
             "x: %d,\n"
             "y: %d,\n"
             "w: %d,\n"
@@ -190,8 +183,8 @@ static void msg_clip(void *handle, int x, int y, int w, int h)
 
 static void msg_unclip(void *handle)
 {
-    GQueue * drawhandle = *(GQueue **)handle;
-    g_queue_push_tail(drawhandle,g_strdup_printf("]},"));
+    frontend *fe = (frontend *)handle;
+    g_queue_push_tail(fe->drawhandle,g_strdup_printf("]},"));
 }
 
 static void msg_start_draw(void *handle)
@@ -327,6 +320,7 @@ static frontend *frontend_new()
     fe->colours = NULL;
 
     fe->puzz_scale = 1.0;
+    fe->drawhandle = NULL;
 
     return fe;
 }
@@ -340,70 +334,6 @@ static bool savefile_read(void *wctx, void *buf, int len)
     return (ret == len);
 }
 
-static midend *midend_for_new_game(frontend *fe, const game *cgame,
-                                   char *arg, bool maybe_game_id,
-                                   bool maybe_save_file, char **error)
-{
-    midend *me = NULL;
-
-    if (!arg) {
-        if (me) midend_free(me);
-        me = midend_new(fe, cgame, &msg_drawing, fe);
-        midend_new_game(me);
-    } else {
-        FILE *fp;
-        const char *err_param, *err_load;
-
-        /*
-         * See if arg is a valid filename of a save game file.
-         */
-        err_load = NULL;
-        if (maybe_save_file && (fp = fopen(arg, "r")) != NULL) {
-            const game *loadgame;
-
-            loadgame = cgame;
-            if (!err_load) {
-                if (me) midend_free(me);
-                me = midend_new(fe, loadgame, &msg_drawing, fe);
-                err_load = midend_deserialise(me, savefile_read, fp);
-            }
-        } else {
-            err_load = "Unable to open file";
-        }
-
-        if (maybe_game_id && (!maybe_save_file || err_load)) {
-            /*
-             * See if arg is a game description.
-             */
-            if (me) midend_free(me);
-            me = midend_new(fe, cgame, &msg_drawing, fe);
-            err_param = midend_game_id(me, arg);
-            if (!err_param) {
-                midend_new_game(me);
-            } else {
-                if (maybe_save_file) {
-                    *error = snewn(256 + strlen(arg) + strlen(err_param) +
-                                   strlen(err_load), char);
-                    sprintf(*error, "Supplied argument \"%s\" is neither a"
-                            " game ID (%s) nor a save file (%s)",
-                            arg, err_param, err_load);
-                } else {
-                    *error = dupstr(err_param);
-                }
-                midend_free(me);
-                sfree(fe);
-                return NULL;
-            }
-        } else if (err_load) {
-            *error = dupstr(err_load);
-            midend_free(me);
-            sfree(fe);
-            return NULL;
-        }
-    }
-
-    return me;
-}
 
 static void get_max_puzzle_size(frontend *fe, int *x, int *y){
     *x = *y = INT_MAX;
@@ -453,21 +383,8 @@ static int fe_set_midend(frontend *fe, midend *me)
     return 0;
 }
 
-void write_to_STDOUT(void *ctx, const void *buf, int len){
-    printf("%s",(char *)buf);
-}
-
-void pipe_serialized(struct midend *me){
-    midend_serialise(me,&write_to_STDOUT,NULL);
-    printf("\n");
-}
-bool read_serialized(void *ctx, void *buf, int len){
-    int got = fread(buf,1,len,stdin);
-    //printf("DBG: len: %d, got: %d\n",len,got,buf);
-    return got == len;
-}
-
-void qconcat(void *str, void **dest){
+void qconcat(void *str, void *vdest){
+    char ** dest = (char **)vdest;
     char * olddest = *dest;
     *dest = g_strconcat(*dest,str,NULL);
     g_free(olddest);
@@ -479,10 +396,11 @@ char * queue_to_str(GQueue *queue){
     return outstr;
 }
 
+
 bool str_is_prefixed(char * prefix, char * test, int maxlen){
     int i;
     for(i=0;i < maxlen;i++){
-        if(test[i] == NULL){
+        if(!test[i]){
             return true;
         }
         if(prefix[i] != test[i]){
@@ -502,25 +420,21 @@ enum commands {
     SERVER_ECHO
 };
 
-int getserverstate(amqp_rpc_reply_t *pwq_res, amqp_envelope_t *pwq_envelope){
+int getserverstate(amqp_message_t *message){
     //TODO get message and decide on what state to be in
-    if( AMQP_RESPONSE_NORMAL != (*pwq_res).reply_type){
-        printf("Abnormal Response, killing server");
-        return SERVER_KILL;
-    }
-    if( str_is_prefixed("NEWXXX",(char *)(pwq_envelope->message.body.bytes),6)){
+    if( str_is_prefixed("NEWXXX",(char *)(message->body.bytes),6)){
         return SERVER_NEW_GAME;
     }
-    if( str_is_prefixed("KILLXX",(char *)(pwq_envelope->message.body.bytes),6)){
+    if( str_is_prefixed("KILLXX",(char *)(message->body.bytes),6)){
         return SERVER_KILL;
     }
-    if( str_is_prefixed("UPDATE",(char *)(pwq_envelope->message.body.bytes),6)){
+    if( str_is_prefixed("UPDATE",(char *)(message->body.bytes),6)){
         return SERVER_UPDATE_GAME;
     }
-    if( str_is_prefixed("REDRAW",(char *)(pwq_envelope->message.body.bytes),6)){
+    if( str_is_prefixed("REDRAW",(char *)(message->body.bytes),6)){
         return SERVER_REDRAW_GAME;
     }
-    if( str_is_prefixed("GETCFG",(char *)(pwq_envelope->message.body.bytes),6)){
+    if( str_is_prefixed("GETCFG",(char *)(message->body.bytes),6)){
         return SERVER_GET_CONFIG;
     }
     printf("Malformed Message, Killing Server");
@@ -528,15 +442,17 @@ int getserverstate(amqp_rpc_reply_t *pwq_res, amqp_envelope_t *pwq_envelope){
 }
 
 struct str_read_ctx {
-    int pos;
+    size_t pos;
     char **str;    
 };
 
-bool read_from_string(struct str_read_ctx * ctx, const void * buf, int len){
-    memcpy(buf,(*(ctx->str))[ctx->pos],len);
+bool read_from_string(void * vctx, void * buf, int len){
+    struct str_read_ctx * ctx = (struct str_read_ctx *)ctx;
+    memcpy(buf,(void *)((*(ctx->str))[ctx->pos]),len);
     ctx->pos+=len;
     return true;
 }
+
 
 void load_game(midend * me,char ** game_str){
     int x,y;
@@ -549,47 +465,64 @@ void load_game(midend * me,char ** game_str){
     midend_size(me, &x, &y, false);
 }
 
+struct str_write_ctx {
+    size_t curr_size;
+    char * buffer;
+};
+
+void write_to_str(void *vctx,const void *buf,int len){
+    struct str_write_ctx *ctx = (struct str_write_ctx *)vctx;
+    ctx->buffer = realloc(ctx->buffer,(ctx->curr_size)+len);
+    memcpy((ctx->buffer)+(ctx->curr_size),buf,len);
+    ctx->curr_size += len;
+}
+
+char * game_string(midend* me){
+    struct str_write_ctx ctx;
+    ctx.curr_size = 0;
+    ctx.buffer = NULL;
+    midend_serialise(me,write_to_str,&ctx);
+    char * out = g_strndup(ctx.buffer,ctx.curr_size);
+    free(ctx.buffer);
+    return out;
+}
 char * draw_string(midend *me,frontend *fe, bool force){
-    GQueue * drawhandle;
     char * drawstring;
     int x,y;
     x = INT_MAX;
     y = INT_MAX;
     midend_size(me,&x,&y,false);
-    drawhandle = g_queue_new();
-    printf("drawhandle: %d\n",drawhandle);
-    fe->dr = drawing_new(&msg_drawing,me,&drawhandle);
-    g_queue_push_tail(drawhandle,g_strdup_printf("{draw:true,size: x: %d,\n y %d,\n discard:[{",x,y));
+    fe->drawhandle = g_queue_new();
+    g_queue_push_tail(fe->drawhandle,g_strdup_printf("{draw:true,size: x: %d,\n y %d,\n discard:[{",x,y));
     if(force){
         midend_force_redraw(me);
     } else {
         midend_redraw(me);
     }
-    g_queue_push_tail(drawhandle,g_strdup("}]}"));
-    drawstring = queue_to_str(drawhandle);
-    g_queue_free_full(drawhandle,g_free);
-    drawing_free(fe->dr);
+    g_queue_push_tail(fe->drawhandle,g_strdup("}]}"));
+    drawstring = queue_to_str(fe->drawhandle);
+    g_queue_free_full(fe->drawhandle,g_free);
     return drawstring;
 }
 
-char * set_cfg(midend *me,char * csopts){
+const char * set_cfg(midend *me,char * csopts){
     char ** opts;
     char garbage[500];
     config_item * cfg;
     opts = g_strsplit(csopts,",",-1);
-    cfg = midend_get_config(me,CFG_SETTINGS,&garbage);
-    if(cfg == NULL){
+    cfg = midend_get_config(me,CFG_SETTINGS,(char **)&garbage);
+    if(!cfg){
         return NULL;
     }
     int i;
     i = 0;
     while(cfg[i].type != C_END){
-        if(opts[i] == NULL){
+        if(!opts[i]){
             return "Not Enough Options";
         }
         switch(cfg[i].type){
             case C_STRING:
-                cfg[i].u.string.sval = opts[i];
+                cfg[i].u.string.sval = g_strdup(opts[i]);
                 break;
             case C_BOOLEAN:
                 cfg[i].u.boolean.bval = atoi(opts[i]);
@@ -602,8 +535,10 @@ char * set_cfg(midend *me,char * csopts){
         }
         i++;
     }
+    const char * out = midend_set_config(me,CFG_SETTINGS,cfg);
+    free_cfg(cfg);
     g_strfreev(opts);
-    return midend_set_config(me,CFG_SETTINGS,cfg);
+    return out;
 }
 
 void process_key_string(midend *me,char * keystring){
@@ -613,14 +548,14 @@ void process_key_string(midend *me,char * keystring){
     midend_process_key(me,x,y,b);
 }
 
-void send_reply(amqp_connection_state_t conn, amqp_envelope_t *envelope,char * msg){
-    printf("sending reply to %s\n",g_strndup(envelope->message.properties.reply_to.bytes,envelope->message.properties.reply_to.len));
+void send_reply(amqp_connection_state_t conn, amqp_message_t *message,char * msg){
+    printf("sending reply to %s\n",g_strndup(message->properties.reply_to.bytes,message->properties.reply_to.len));
     amqp_bytes_t msgbytes;
     msgbytes = amqp_cstring_bytes(msg);
-    die_on_error(amqp_basic_publish(conn, 1, amqp_cstring_bytes(""),envelope->message.properties.reply_to,0,0,NULL,msgbytes),"Failed to send message");
+    die_on_error(amqp_basic_publish(conn, 1, amqp_cstring_bytes(""),message->properties.reply_to,0,0,NULL,msgbytes),"Failed to send message");
 }
 
-int gameloop(amqp_connection_state_t pwq_conn){
+int gameloop(amqp_connection_state_t pwq_conn,amqp_bytes_t *queue){
     printf("SERVER STARTING\n");
     //Setup For this function
     bool keepgoing = true;
@@ -636,7 +571,8 @@ int gameloop(amqp_connection_state_t pwq_conn){
     gg = &thegame;
     fe = frontend_new();
 
-    me = midend_for_new_game(fe, gg, NULL, false, false, &starterror);
+    me = midend_new(fe, gg, &msg_drawing, fe);
+    midend_new_game(me);
     fe_set_midend(fe, me);
     
     if (!me) {
@@ -653,24 +589,33 @@ int gameloop(amqp_connection_state_t pwq_conn){
     config_item *cfg;
     char garbage[100];
     char * drawstring;
+    char * gamestring;
+    char * respstring;
 
     //Setup For Message Passing
     amqp_rpc_reply_t pwq_res;
-    amqp_envelope_t pwq_envelope;
-
+    amqp_envelope_t env;
+    amqp_envelope_t *pwq_envelope = &env;
     char * msg_text;
     char ** msg_parts;
 
     //Setup For Message construction
-    char * cfg_set_error;
+    const char * cfg_set_error;
 
     while(keepgoing){
         amqp_maybe_release_buffers(pwq_conn);
-        pwq_res = amqp_consume_message(pwq_conn,&pwq_envelope, NULL, 0);
-        msg_text = g_strndup((char *)(pwq_envelope.message.body.bytes),pwq_envelope.message.body.len);
+        pwq_res = 
+        pwq_res = amqp_consume_message(pwq_conn, pwq_envelope, NULL, 0);
+        amqp_basic_ack(pwq_conn,1,pwq_envelope->delivery_tag,false);
+        if(pwq_res.reply_type != AMQP_RESPONSE_NORMAL){
+            printf("errored %d\n",pwq_res.reply_type);
+            amqp_destroy_envelope(pwq_envelope);
+            continue;
+        }
+        msg_text = g_strndup((char *)(pwq_envelope->message.body.bytes),pwq_envelope->message.body.len);
         printf("MSG: %s\n",msg_text);
-        msg_parts = g_strsplit(msg_text,"-",5);
-        switch(getserverstate(&pwq_res,&pwq_envelope)){
+        msg_parts = g_strsplit(msg_text,"-",5); 
+        switch(getserverstate(&(pwq_envelope->message))){
             case SERVER_KILL: 
                 keepgoing = false;
                 printf("Adieu\n");
@@ -678,41 +623,53 @@ int gameloop(amqp_connection_state_t pwq_conn){
             case SERVER_NEW_GAME:
                 printf("NEW GAME\n");
                 if(msg_parts[1] == NULL){
-                    printf("Malformed Msg\n");
+                    send_reply(pwq_conn,&(pwq_envelope->message),"MALFORMED MSG");
                     break;
                 }
                 cfg_set_error = set_cfg(me,msg_parts[1]);
                 midend_new_game(me);
                 drawstring = draw_string(me,fe,true);
-                send_reply(pwq_conn,&pwq_envelope,drawstring);
+                gamestring = game_string(me);
+                respstring = g_strdup_printf("{draw:%s,\ngamestate:\"%s\"\n,}\n",drawstring,gamestring);
+                send_reply(pwq_conn,&(pwq_envelope->message),respstring);
                 g_free(drawstring);
+                g_free(gamestring);
+                g_free(respstring);
                 break;
             case SERVER_UPDATE_GAME:
                 printf("UPDATE GAME\n");
                 if(msg_parts[1] == NULL || msg_parts[2] == NULL){
-                    printf("Malformed Msg\n");
+                    send_reply(pwq_conn,&(pwq_envelope->message),"MALFORMED MSG");
                     break;
                 }
                 load_game(me,&(msg_parts[1]));
                 process_key_string(me,msg_parts[2]);
                 drawstring = draw_string(me,fe,false); 
-                send_reply(pwq_conn,&pwq_envelope,drawstring);
+                gamestring = game_string(me);
+                respstring = g_strdup_printf("{draw:%s,\ngamestate:\"%s\"\n,}\n",drawstring,gamestring);
+                send_reply(pwq_conn,&(pwq_envelope->message),respstring);
                 g_free(drawstring);
+                g_free(gamestring);
+                g_free(respstring);
                 break;
             case SERVER_REDRAW_GAME:
                 printf("REDRAW GAME");
                 if(msg_parts[1] == NULL){
-                    printf("Malformed Msg\n");
+                    send_reply(pwq_conn,&(pwq_envelope->message),"MALFORMED MSG");
                     break;
                 }
                 load_game(me,&(msg_parts[1]));
                 drawstring = draw_string(me,fe,true); 
-                send_reply(pwq_conn,&pwq_envelope,drawstring);
+                gamestring = game_string(me);
+                respstring = g_strdup_printf("{draw:%s,\ngamestate:\"%s\"\n,}\n",drawstring,gamestring);
+                send_reply(pwq_conn,&(pwq_envelope->message),respstring);
                 g_free(drawstring);
+                g_free(gamestring);
+                g_free(respstring);
                 break;
             case SERVER_GET_CONFIG:
                 printf("GET_CONFIG\n");
-		        cfg = midend_get_config(me,CFG_SETTINGS,&garbage);
+                cfg = midend_get_config(me,CFG_SETTINGS,(char **)&garbage);
                 drawhandle = g_queue_new();
                 g_queue_push_tail(drawhandle,g_strdup("{config:true,\nopts:[\n"));
                 if(cfg != NULL){
@@ -733,7 +690,7 @@ int gameloop(amqp_connection_state_t pwq_conn){
                 }
                 g_queue_push_tail(drawhandle,g_strdup("]}"));
                 drawstring = queue_to_str(drawhandle);
-                send_reply(pwq_conn,&pwq_envelope,drawstring);
+                send_reply(pwq_conn,&(pwq_envelope->message),drawstring);
                 g_free(drawstring);
                 g_queue_free_full(drawhandle,g_free);
                 free_cfg(cfg);
@@ -745,10 +702,15 @@ int gameloop(amqp_connection_state_t pwq_conn){
             default :
                 printf("SERVER ERROR\n");
         }
-    amqp_destroy_envelope(&pwq_envelope);
-    g_free(msg_text);
-    g_strfreev(msg_parts);
+        g_free(msg_text);
+        g_strfreev(msg_parts);
+        amqp_destroy_envelope(pwq_envelope);
     }
+     die_on_amqp_error(amqp_channel_close(pwq_conn, 1, AMQP_REPLY_SUCCESS),
+                                 "Closing channel");
+     die_on_amqp_error(amqp_connection_close(pwq_conn, AMQP_REPLY_SUCCESS),
+                                   "Closing connection");
+     die_on_error(amqp_destroy_connection(pwq_conn), "Ending connection");
     return 0;
 }
 
@@ -757,7 +719,8 @@ int main(int argc, char*argv[]){
     //For Puzzle Work Queue
 	char const *pwq_hostname;
 	int pwq_port, pwq_status;
-	char const *pwq_queuename; 
+	char const *pwq_queuename;
+    amqp_bytes_t queue;
     char const *pwq_user, *pwq_pass;
     amqp_socket_t *pwq_socket = NULL;
 	amqp_connection_state_t pwq_conn;
@@ -805,6 +768,7 @@ int main(int argc, char*argv[]){
     amqp_channel_open(pwq_conn, 1);
     die_on_amqp_error(amqp_get_rpc_reply(pwq_conn), "Opening PWQ channel");
     
+    queue = amqp_cstring_bytes(pwq_queuename);
     amqp_queue_declare(pwq_conn,1,amqp_cstring_bytes(pwq_queuename),0,0,0,0,amqp_empty_table);
     die_on_amqp_error(amqp_get_rpc_reply(pwq_conn), "Declaring PWQ queue");
 
@@ -812,7 +776,7 @@ int main(int argc, char*argv[]){
                                  0, 0, 0, amqp_empty_table);
     die_on_amqp_error(amqp_get_rpc_reply(pwq_conn), "Consuming PWQ");
 
-    return gameloop(pwq_conn);
+    return gameloop(pwq_conn,&queue);
 }
 
 
