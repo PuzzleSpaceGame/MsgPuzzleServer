@@ -90,22 +90,22 @@ static void msg_draw_text(void *handle, int x, int y, int fonttype,
             "\"x\": %d,\n"
             "\"y\": %d,\n" 
             "\"fonttype\": %d,\n"
-            "fontsize: %d,\n"
-            "align: %d,\n"
-            "colour: %d,\n"
-            "text: %s},\n",
+            "\"fontsize\": %d,\n"
+            "\"align\": %d,\n"
+            "\"colour\": %d,\n"
+            "\"text\": \"%s\"},\n",
             x,y,fonttype,fontsize,align,colour,text));
 }
 
 static void msg_draw_rect(void *handle, int x, int y, int w, int h, int colour)
 {
     frontend *fe = (frontend *)handle;
-    g_queue_push_tail(fe->drawhandle,g_strdup_printf("{draw:rect,\n"
-            "x: %d,\n"
-            "y: %d,\n"
-            "w: %d,\n"
-            "h: %d,\n"
-            "colour: %d},\n",
+    g_queue_push_tail(fe->drawhandle,g_strdup_printf("{\"draw\":\"rect\",\n"
+            "\"x\": %d,\n"
+            "\"y\": %d,\n"
+            "\"w\": %d,\n"
+            "\"h\": %d,\n"
+            "\"colour\": %d},\n",
             x,y,w,h,colour));
 
 }
@@ -113,12 +113,12 @@ static void msg_draw_rect(void *handle, int x, int y, int w, int h, int colour)
 static void msg_draw_line(void *handle, int x1, int y1, int x2, int y2, int colour)
 { 
     frontend *fe = (frontend *)handle;
-    g_queue_push_tail(fe->drawhandle,g_strdup_printf("{draw:line,\n"
-            "x1: %d,\n"
-            "y1: %d,\n"
-            "x2: %d,\n"
-            "y2: %d,\n"
-            "colour: %d},\n",
+    g_queue_push_tail(fe->drawhandle,g_strdup_printf("{\"draw\":\"line\",\n"
+            "\"x1\": %d,\n"
+            "\"y1\": %d,\n"
+            "\"x2\": %d,\n"
+            "\"y2\": %d,\n"
+            "\"colour\": %d},\n",
             x1,y1,x2,y2,colour));
 }
 
@@ -136,11 +136,11 @@ static void msg_draw_polygon(void *handle, int *coords, int npoints,
     }
     index += sprintf(&str[index], "]");
     g_queue_push_tail(fe->drawhandle,g_strdup_printf(
-                "{draw:polygon,\n"
-                "coords: %s,\n"
-                "npoints: %d,\n"
-                "fillcolour: %d,\n"
-                "outlinecolour: %d},\n",
+                "{\"draw\":\"polygon\",\n"
+                "\"coords\": %s,\n"
+                "\"npoints\": %d,\n"
+                "\"fillcolour\": %d,\n"
+                "\"outlinecolour\": %d},\n",
                 str,npoints,fillcolour,outlinecolour));
 }
 
@@ -148,24 +148,24 @@ static void msg_draw_circle(void *handle, int cx, int cy, int radius,
 			 int fillcolour, int outlinecolour)
 {
     frontend *fe = (frontend *)handle;
-    g_queue_push_tail(fe->drawhandle,g_strdup_printf("draw:circle,\n"
-            "cx: %d,\n"
-            "cy: %d,\n"
-            "radius: %d,\n"
-            "fillcolour: %d,\n"
-            "outlinecolour: %d},\n",
+    g_queue_push_tail(fe->drawhandle,g_strdup_printf("\"draw\":\"circle\",\n"
+            "\"cx\": %d,\n"
+            "\"cy\": %d,\n"
+            "\"radius\": %d,\n"
+            "\"fillcolour\": %d,\n"
+            "\"outlinecolour\": %d},\n",
             cx,cy,radius,fillcolour,outlinecolour));
 }
 
 static void msg_draw_update(void *handle, int x, int y, int w, int h)
 {
     frontend *fe = (frontend *)handle;
-    g_queue_push_tail(fe->drawhandle,g_strdup_printf("]},\ndraw_update:{\n"
-            "x: %d,\n"
-            "y: %d,\n"
-            "w: %d,\n"
-            "h: %d,\n"
-            "cmds: [",
+    g_queue_push_tail(fe->drawhandle,g_strdup_printf("]},\n\"draw_update\":{\n"
+            "\"x\": %d,\n"
+            "\"y\": %d,\n"
+            "\"w\": %d,\n"
+            "\"h\": %d,\n"
+            "\"cmds\": [",
             x,y,w,h));
 }
 
@@ -173,11 +173,11 @@ static void msg_clip(void *handle, int x, int y, int w, int h)
 {
     frontend *fe = (frontend *)handle;
     g_queue_push_tail(fe->drawhandle,g_strdup_printf("clip:{\n"
-            "x: %d,\n"
-            "y: %d,\n"
-            "w: %d,\n"
-            "h: %d,\n"
-            "cmds:[\n",
+            "\"x\": %d,\n"
+            "\"y\": %d,\n"
+            "\"w\": %d,\n"
+            "\"h\": %d,\n"
+            "\"cmds\":[\n",
             x,y,w,h));
 }
 
@@ -493,7 +493,7 @@ char * draw_string(midend *me,frontend *fe, bool force){
     y = INT_MAX;
     midend_size(me,&x,&y,false);
     fe->drawhandle = g_queue_new();
-    g_queue_push_tail(fe->drawhandle,g_strdup_printf("{draw:true,size: x: %d,\n y %d,\n discard:[{",x,y));
+    g_queue_push_tail(fe->drawhandle,g_strdup_printf("{\"draw\":true,\"size\": \"x\": %d,\n \"y\" %d,\n \"discard\":[{",x,y));
     if(force){
         midend_force_redraw(me);
     } else {
@@ -630,7 +630,7 @@ int gameloop(amqp_connection_state_t pwq_conn,amqp_bytes_t *queue){
                 midend_new_game(me);
                 drawstring = draw_string(me,fe,true);
                 gamestring = game_string(me);
-                respstring = g_strdup_printf("{draw:%s,\ngamestate:\"%s\"\n,}\n",drawstring,gamestring);
+                respstring = g_strdup_printf("{\"draw\":%s,\n\"gamestate\":\"%s\"\n,}\n",drawstring,gamestring);
                 send_reply(pwq_conn,&(pwq_envelope->message),respstring);
                 g_free(drawstring);
                 g_free(gamestring);
@@ -646,7 +646,7 @@ int gameloop(amqp_connection_state_t pwq_conn,amqp_bytes_t *queue){
                 process_key_string(me,msg_parts[2]);
                 drawstring = draw_string(me,fe,false); 
                 gamestring = game_string(me);
-                respstring = g_strdup_printf("{draw:%s,\ngamestate:\"%s\"\n,}\n",drawstring,gamestring);
+                respstring = g_strdup_printf("{\"draw\":%s,\n\"gamestate\":\"%s\"\n,}\n",drawstring,gamestring);
                 send_reply(pwq_conn,&(pwq_envelope->message),respstring);
                 g_free(drawstring);
                 g_free(gamestring);
@@ -661,7 +661,7 @@ int gameloop(amqp_connection_state_t pwq_conn,amqp_bytes_t *queue){
                 load_game(me,&(msg_parts[1]));
                 drawstring = draw_string(me,fe,true); 
                 gamestring = game_string(me);
-                respstring = g_strdup_printf("{draw:%s,\ngamestate:\"%s\"\n,}\n",drawstring,gamestring);
+                respstring = g_strdup_printf("{\"draw\":%s,\n\"gamestate\":\"%s\"\n,}\n",drawstring,gamestring);
                 send_reply(pwq_conn,&(pwq_envelope->message),respstring);
                 g_free(drawstring);
                 g_free(gamestring);
@@ -671,18 +671,18 @@ int gameloop(amqp_connection_state_t pwq_conn,amqp_bytes_t *queue){
                 printf("GET_CONFIG\n");
                 cfg = midend_get_config(me,CFG_SETTINGS,(char **)&garbage);
                 drawhandle = g_queue_new();
-                g_queue_push_tail(drawhandle,g_strdup("{config:true,\nopts:[\n"));
+                g_queue_push_tail(drawhandle,g_strdup("{\"config\":true,\n\"opts\":[\n"));
                 if(cfg != NULL){
                     i=0;
                     while(cfg[i].type != C_END){
                         g_queue_push_tail(drawhandle,g_strdup_printf("{name:%s,\n",cfg[i].name));
                         if(cfg[i].type == C_STRING){
-                            g_queue_push_tail(drawhandle,g_strdup("type:string,\n"));
+                            g_queue_push_tail(drawhandle,g_strdup("\"type\":\"string\",\n"));
                         } else if(cfg[i].type == C_BOOLEAN){
-                            g_queue_push_tail(drawhandle,g_strdup("type:boolean,\n"));
+                            g_queue_push_tail(drawhandle,g_strdup("\"type\":\"boolean\",\n"));
                         } else if(cfg[i].type == C_CHOICES){
-                            g_queue_push_tail(drawhandle,g_strdup("type:choices,\n"));
-                            g_queue_push_tail(drawhandle,g_strdup_printf("choices:%s,\n",cfg[i].u.choices.choicenames));
+                            g_queue_push_tail(drawhandle,g_strdup("\"type\":\"choices\",\n"));
+                            g_queue_push_tail(drawhandle,g_strdup_printf("\"choices\":%s,\n",cfg[i].u.choices.choicenames));
                         }
                         g_queue_push_tail(drawhandle,g_strdup("},\n"));
                         i++;
