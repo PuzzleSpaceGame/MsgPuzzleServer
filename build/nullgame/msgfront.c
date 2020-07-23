@@ -7,7 +7,7 @@
 #include <amqp_tcp_socket.h>
 #include "utils.h"
 
-#include <gmodule.h>
+#include <glib.h>
 
 #define CLASSNAME thegame.name
 
@@ -43,6 +43,7 @@ struct frontend {
     drawing *dr;
     int xmin, ymin;
     float puzz_scale;
+    GQueue * drawhandle;
 };
 
 void fatal(const char *fmt, ...){
@@ -52,11 +53,9 @@ void fatal(const char *fmt, ...){
 //TODO: Generate an actual random number
 void get_random_seed(void **randseed, int *randseedsize)
 {
-    printf("get_random_seed\n");
-    *randseed = smalloc(64);
-    fflush(stdout);
-    fgets(*randseed,64,stdin);
-    * randseedsize = 64;
+    *randseed = malloc(sizeof(uint64_t));
+    ((uint64_t * )(*randseed))[0] = now_microseconds();
+    *randseedsize = sizeof(uint64_t);
 }
 // TODO: Make an actual default color
 void frontend_default_colour(frontend *fe, float *output)
@@ -86,115 +85,114 @@ static void msg_draw_text(void *handle, int x, int y, int fonttype,
 			  int fontsize, int align, int colour,
                           const char *text)
 {
-    GQueue *drawhandle = handle;
-    g_queue_push_tail(drawhandle,g_strdup_printf("{draw:text,\n" 
-            "x: %d,\n" 
-            "y: %d,\n" 
-            "fonttype: %d,\n"
-            "fontsize: %d,\n"
-            "align: %d,\n"
-            "colour: %d,\n"
-            "text: %s},\n",
+    frontend *fe = (frontend *)handle;
+    g_queue_push_tail(fe->drawhandle,g_strdup_printf("{\"draw\":\"text\",\n" 
+            "\"x\": %d,\n"
+            "\"y\": %d,\n" 
+            "\"fonttype\": %d,\n"
+            "\"fontsize\": %d,\n"
+            "\"align\": %d,\n"
+            "\"colour\": %d,\n"
+            "\"text\": \"%s\"},\n",
             x,y,fonttype,fontsize,align,colour,text));
 }
 
 static void msg_draw_rect(void *handle, int x, int y, int w, int h, int colour)
 {
-    GQueue *drawhandle = handle;
-    g_queue_push_tail(drawhandle,g_strdup_printf("{draw:rect,\n"
-            "x: %d,\n"
-            "y: %d,\n"
-            "w: %d,\n"
-            "h: %d,\n"
-            "colour: %d},\n",
+    frontend *fe = (frontend *)handle;
+    g_queue_push_tail(fe->drawhandle,g_strdup_printf("{\"draw\":\"rect\",\n"
+            "\"x\": %d,\n"
+            "\"y\": %d,\n"
+            "\"w\": %d,\n"
+            "\"h\": %d,\n"
+            "\"colour\": %d},\n",
             x,y,w,h,colour));
+
 }
 
 static void msg_draw_line(void *handle, int x1, int y1, int x2, int y2, int colour)
 { 
-    GQueue *drawhandle = handle;
-    g_queue_push_tail(drawhandle,g_strdup_printf("{draw:line,\n"
-            "x1: %d,\n"
-            "y1: %d,\n"
-            "x2: %d,\n"
-            "y2: %d,\n"
-            "colour: %d},\n",
+    frontend *fe = (frontend *)handle;
+    g_queue_push_tail(fe->drawhandle,g_strdup_printf("{\"draw\":\"line\",\n"
+            "\"x1\": %d,\n"
+            "\"y1\": %d,\n"
+            "\"x2\": %d,\n"
+            "\"y2\": %d,\n"
+            "\"colour\": %d},\n",
             x1,y1,x2,y2,colour));
 }
 
 static void msg_draw_polygon(void *handle, int *coords, int npoints,
 		     int fillcolour, int outlinecolour)
 { 
-    GQueue *drawhandle = handle;
+    frontend *fe = (frontend *)handle;
     //convert coords array to string
     char str[128];
     int i = 0;
     int index = 0;
     index += sprintf(&str[index],"[%d,",coords[0]);
-    for(i=1;i<npoints,i++){
+    for(i=1;i<npoints;i++){
         index += sprintf(&str[index], ",%d", coords[i]);
     }
     index += sprintf(&str[index], "]");
-    g_queue_push_tail(drawhandle,g_strdup_printf(
-                "{draw:polygon,\n"
-                "coords: %s,\n"
-                "npoints: %d,\n"
-                "fillcolour: %d,\n"
-                "outlinecolour: %d},\n",
+    g_queue_push_tail(fe->drawhandle,g_strdup_printf(
+                "{\"draw\":\"polygon\",\n"
+                "\"coords\": %s,\n"
+                "\"npoints\": %d,\n"
+                "\"fillcolour\": %d,\n"
+                "\"outlinecolour\": %d},\n",
                 str,npoints,fillcolour,outlinecolour));
 }
 
 static void msg_draw_circle(void *handle, int cx, int cy, int radius,
 			 int fillcolour, int outlinecolour)
 {
-    GQueue *drawhandle = handle;
-    g_queue_push_tail(drawhandle,g_strdup_printf("draw:circle,\n"
-            "cx: %d,\n"
-            "cy: %d,\n"
-            "radius: %d,\n"
-            "fillcolour: %d,\n"
-            "outlinecolour: %d},\n",
+    frontend *fe = (frontend *)handle;
+    g_queue_push_tail(fe->drawhandle,g_strdup_printf("{\"draw\":\"circle\",\n"
+            "\"cx\": %d,\n"
+            "\"cy\": %d,\n"
+            "\"radius\": %d,\n"
+            "\"fillcolour\": %d,\n"
+            "\"outlinecolour\": %d},\n",
             cx,cy,radius,fillcolour,outlinecolour));
 }
 
 static void msg_draw_update(void *handle, int x, int y, int w, int h)
 {
-    GQueue *drawhandle = handle;
-    g_queue_push_tail(drawhandle,g_strdup_printf("]},\ndraw_update:{\n"
-            "x: %d,\n"
-            "y: %d,\n"
-            "w: %d,\n"
-            "h: %d,\n"
-            "cmds: [",
+    frontend *fe = (frontend *)handle;
+    g_queue_push_tail(fe->drawhandle,g_strdup_printf("{\"draw_update\": true,\n"
+            "\"x\": %d,\n"
+            "\"y\": %d,\n"
+            "\"w\": %d,\n"
+            "\"h\": %d,\n"
+            "},\n",
             x,y,w,h));
 }
 
 static void msg_clip(void *handle, int x, int y, int w, int h)
 {
-    GQueue *drawhandle = handle;
-    g_queue_push_tail(drawhandle,g_strdup_printf("clip:{\n"
-            "x: %d,\n"
-            "y: %d,\n"
-            "w: %d,\n"
-            "h: %d,\n"
-            "cmds:[\n",
+    frontend *fe = (frontend *)handle;
+    g_queue_push_tail(fe->drawhandle,g_strdup_printf("{\"clip\":true,\n"
+            "\"x\": %d,\n"
+            "\"y\": %d,\n"
+            "\"w\": %d,\n"
+            "\"h\": %d,\n"
+            "\"cmds\":[\n",
             x,y,w,h));
 }
 
 static void msg_unclip(void *handle)
 {
-    GQueue *drawhandle = handle;
-    g_queue_push_tail(drawhandle,g_strdup_printf("]},"));
+    frontend *fe = (frontend *)handle;
+    g_queue_push_tail(fe->drawhandle,g_strdup_printf("]},\n"));
 }
 
 static void msg_start_draw(void *handle)
 {
-    return;
 }
 
 static void msg_end_draw(void *handle)
 {
-    return:
 }
 
 static void msg_status_bar(void *handle, const char *text)
@@ -209,73 +207,61 @@ struct blitter {
 
 static blitter *msg_blitter_new(void *handle, int w, int h){    
     fatal("blitter func called");
-    return NULL;
 }
 
 static void msg_blitter_free(void *handle, blitter *bl)
 {
     fatal("blitter func called");
-    return;
 }
 static void msg_blitter_save(void *handle, blitter *bl, int x, int y)
 {
     fatal("blitter func called");
-    return;
 }
 
 static void msg_blitter_load(void *handle, blitter *bl, int x, int y)
 {
     fatal("blitter func called");
-    return;
 }
 
 static void msg_begin_doc(void *handle, int pages)
 {
     fatal("print func called");
-    return NULL;
 }
 
 static void msg_begin_page(void *handle, int number)
 {
     fatal("print func called");
-    return NULL;
 }
 
 static void msg_begin_puzzle(void *handle, float xm, float xc,
 			  float ym, float yc, int pw, int ph, float wmm)
 {
     fatal("print func called");
-    return NULL;
 }
 
 static void msg_end_puzzle(void *handle)
 {
     fatal("print func called");
-    return NULL;
 }
 
 static void msg_end_page(void *handle, int number)
 {
     fatal("print func called");
-    return NULL;
 }
 
 static void msg_end_doc(void *handle)
 {
     fatal("print func called");
-    return NULL;
 }
 
 static void msg_line_width(void *handle, float width)
 {
     fatal("print func called");
-    return NULL;
 }
 
 static void msg_line_dotted(void *handle, bool dotted)
 {
     fatal("print func called");
-    return NULL;
 }
 
 char *msg_text_fallback(void *handle, const char *const *strings, int nstrings)
@@ -334,6 +320,7 @@ static frontend *frontend_new()
     fe->colours = NULL;
 
     fe->puzz_scale = 1.0;
+    fe->drawhandle = NULL;
 
     return fe;
 }
@@ -347,70 +334,6 @@ static bool savefile_read(void *wctx, void *buf, int len)
     return (ret == len);
 }
 
-static midend *midend_for_new_game(frontend *fe, const game *cgame,
-                                   char *arg, bool maybe_game_id,
-                                   bool maybe_save_file, char **error)
-{
-    midend *me = NULL;
-
-    if (!arg) {
-        if (me) midend_free(me);
-        me = midend_new(fe, cgame, &msg_drawing, fe);
-        midend_new_game(me);
-    } else {
-        FILE *fp;
-        const char *err_param, *err_load;
-
-        /*
-         * See if arg is a valid filename of a save game file.
-         */
-        err_load = NULL;
-        if (maybe_save_file && (fp = fopen(arg, "r")) != NULL) {
-            const game *loadgame;
-
-            loadgame = cgame;
-            if (!err_load) {
-                if (me) midend_free(me);
-                me = midend_new(fe, loadgame, &msg_drawing, fe);
-                err_load = midend_deserialise(me, savefile_read, fp);
-            }
-        } else {
-            err_load = "Unable to open file";
-        }
-
-        if (maybe_game_id && (!maybe_save_file || err_load)) {
-            /*
-             * See if arg is a game description.
-             */
-            if (me) midend_free(me);
-            me = midend_new(fe, cgame, &msg_drawing, fe);
-            err_param = midend_game_id(me, arg);
-            if (!err_param) {
-                midend_new_game(me);
-            } else {
-                if (maybe_save_file) {
-                    *error = snewn(256 + strlen(arg) + strlen(err_param) +
-                                   strlen(err_load), char);
-                    sprintf(*error, "Supplied argument \"%s\" is neither a"
-                            " game ID (%s) nor a save file (%s)",
-                            arg, err_param, err_load);
-                } else {
-                    *error = dupstr(err_param);
-                }
-                midend_free(me);
-                sfree(fe);
-                return NULL;
-            }
-        } else if (err_load) {
-            *error = dupstr(err_load);
-            midend_free(me);
-            sfree(fe);
-            return NULL;
-        }
-    }
-
-    return me;
-}
 
 static void get_max_puzzle_size(frontend *fe, int *x, int *y){
     *x = *y = INT_MAX;
@@ -460,18 +383,31 @@ static int fe_set_midend(frontend *fe, midend *me)
     return 0;
 }
 
-void write_to_STDOUT(void *ctx, const void *buf, int len){
-    printf("%s",buf);
+void qconcat(void *str, void *vdest){
+    char ** dest = (char **)vdest;
+    char * olddest = *dest;
+    *dest = g_strconcat(*dest,str,NULL);
+    g_free(olddest);
+}
+char * queue_to_str(GQueue *queue){
+    char *outstr;
+    outstr = g_strdup("");
+    g_queue_foreach(queue,qconcat,&outstr);
+    return outstr;
 }
 
-void pipe_serialized(struct midend *me){
-    midend_serialise(me,&write_to_STDOUT,NULL);
-    printf("\n");
-}
-bool read_serialized(void *ctx, void *buf, int len){
-    int got = fread(buf,1,len,stdin);
-    //printf("DBG: len: %d, got: %d\n",len,got,buf);
-    return got == len;
+
+bool str_is_prefixed(char * prefix, char * test, int maxlen){
+    int i;
+    for(i=0;i < maxlen;i++){
+        if(!test[i]){
+            return true;
+        }
+        if(prefix[i] != test[i]){
+            return false;
+        }
+    }
+    return true;
 }
 
 enum commands {
@@ -484,18 +420,174 @@ enum commands {
     SERVER_ECHO
 };
 
-int getserverstate(void){
+int getserverstate(amqp_message_t *message){
     //TODO get message and decide on what state to be in
-    return SERVER_ERROR;
+    if( str_is_prefixed("NEWXXX",(char *)(message->body.bytes),6)){
+        return SERVER_NEW_GAME;
+    }
+    if( str_is_prefixed("KILLXX",(char *)(message->body.bytes),6)){
+        return SERVER_KILL;
+    }
+    if( str_is_prefixed("UPDATE",(char *)(message->body.bytes),6)){
+        return SERVER_UPDATE_GAME;
+    }
+    if( str_is_prefixed("REDRAW",(char *)(message->body.bytes),6)){
+        return SERVER_REDRAW_GAME;
+    }
+    if( str_is_prefixed("GETCFG",(char *)(message->body.bytes),6)){
+        return SERVER_GET_CONFIG;
+    }
+    printf("Malformed Message, Killing Server");
+    return SERVER_KILL;
 }
 
-int gameloop(void){
+struct str_read_ctx {
+    size_t pos;
+    char **str;    
+};
+
+bool read_from_string(void * vctx, void * buf, int len){
+    struct str_read_ctx * ctx = (struct str_read_ctx *)vctx;
+    memcpy(buf,(*(ctx->str)+ctx->pos),len);
+    ctx->pos+=len;
+    return true;
+}
+
+
+void load_game(midend * me,char ** game_str){
+    int x,y;
+    struct str_read_ctx ctx;
+    ctx.pos = 0;
+    ctx.str = game_str;
+    midend_deserialise(me,read_from_string,&ctx);
+    x = INT_MAX;
+    y = INT_MAX;
+    midend_size(me, &x, &y, false);
+}
+
+struct str_write_ctx {
+    size_t curr_size;
+    char * buffer;
+};
+
+void write_to_str(void *vctx,const void *buf,int len){
+    struct str_write_ctx *ctx = (struct str_write_ctx *)vctx;
+    ctx->buffer = realloc(ctx->buffer,(ctx->curr_size)+len);
+    memcpy((ctx->buffer)+(ctx->curr_size),buf,len);
+    ctx->curr_size += len;
+}
+
+char * game_string(midend* me){
+    struct str_write_ctx ctx;
+    ctx.curr_size = 0;
+    ctx.buffer = NULL;
+    midend_serialise(me,write_to_str,&ctx);
+    char * out = g_strndup(ctx.buffer,ctx.curr_size);
+    free(ctx.buffer);
+    return out;
+}
+char * draw_string(midend *me,frontend *fe, bool force){
+    char * drawstring;
+    int x,y;
+    x = INT_MAX;
+    y = INT_MAX;
+    midend_size(me,&x,&y,false);
+    fe->drawhandle = g_queue_new();
+    g_queue_push_tail(fe->drawhandle,g_strdup_printf("{\"draw\":true,\"size\": {\"x\": %d, \"y\": %d,},\n \"cmds\":[\n",x,y));
+    if(force){
+        midend_force_redraw(me);
+    } else {
+        midend_redraw(me);
+    }
+    g_queue_push_tail(fe->drawhandle,g_strdup("]}"));
+    drawstring = queue_to_str(fe->drawhandle);
+    g_queue_free_full(fe->drawhandle,g_free);
+    return drawstring;
+}
+
+const char * set_cfg(midend *me,char * csopts){
+    char ** opts;
+    char garbage[500];
+    config_item * cfg;
+    opts = g_strsplit(csopts,",",-1);
+    cfg = midend_get_config(me,CFG_SETTINGS,(char **)&garbage);
+    if(!cfg){
+        return NULL;
+    }
+    int i;
+    i = 0;
+    while(cfg[i].type != C_END){
+        if(!opts[i]){
+            return "Not Enough Options";
+        }
+        switch(cfg[i].type){
+            case C_STRING:
+                cfg[i].u.string.sval = g_strdup(opts[i]);
+                break;
+            case C_BOOLEAN:
+                cfg[i].u.boolean.bval = atoi(opts[i]);
+                break;
+            case C_CHOICES:
+                cfg[i].u.choices.selected = atoi(opts[i]);
+                break;
+            default:
+                return "Something went horribly wrong in config-setting";
+        }
+        i++;
+    }
+    const char * out = midend_set_config(me,CFG_SETTINGS,cfg);
+    i = 0;
+    free_cfg(cfg);
+    g_strfreev(opts);
+    return out;
+}
+
+void process_key_string(midend *me,char * keystring){
+    char ** keyparts;
+    int x,y,b;
+    sscanf(keystring, "%d,%d,%d",&x,&y,&b);
+    midend_process_key(me,x,y,b);
+}
+
+void send_reply(amqp_connection_state_t conn, amqp_message_t *message,char * msg){
+    GRegex * fix_quoted_newlines = g_regex_new("(\"[^\"\\n]*)\\r?\\n(?!(([^\"]*\"){2})*[^\"]*$)",0,0,NULL);
+    GRegex * fix_trailing_commas = g_regex_new(",(\\s*[\\]}])",0,0,NULL);
+
+    char * newline_fixed0 = g_regex_replace(fix_quoted_newlines,msg,-1,0,"\\1\\\\n",0,NULL);
+    char * newline_fixed1 = g_regex_replace(fix_quoted_newlines,newline_fixed0,-1,0,"\\1\\\\n",0,NULL);
+    g_free(newline_fixed0);
+    char * newline_fixed2 = g_regex_replace(fix_quoted_newlines,newline_fixed1,-1,0,"\\1\\\\n",0,NULL);
+    g_free(newline_fixed1);
+    char * newline_fixed3 = g_regex_replace(fix_quoted_newlines,newline_fixed2,-1,0,"\\1\\\\n",0,NULL);
+    g_free(newline_fixed2);
+    char * newline_fixed4 = g_regex_replace(fix_quoted_newlines,newline_fixed3,-1,0,"\\1\\\\n",0,NULL);
+    g_free(newline_fixed3);
+    char * newline_fixed5 = g_regex_replace(fix_quoted_newlines,newline_fixed4,-1,0,"\\1\\\\n",0,NULL);
+    g_free(newline_fixed4);
+    char * newline_fixed6 = g_regex_replace(fix_quoted_newlines,newline_fixed5,-1,0,"\\1\\\\n",0,NULL);
+    g_free(newline_fixed5);
+    char * newline_fixed7 = g_regex_replace(fix_quoted_newlines,newline_fixed6,-1,0,"\\1\\\\n",0,NULL);
+    g_free(newline_fixed6);
+    char * newline_fixed8 = g_regex_replace(fix_quoted_newlines,newline_fixed7,-1,0,"\\1\\\\n",0,NULL);
+    g_free(newline_fixed7);
+    char * newline_fixed9 = g_regex_replace(fix_quoted_newlines,newline_fixed8,-1,0,"\\1\\\\n",0,NULL);
+    g_free(newline_fixed8);
+    char * commas_fixed = g_regex_replace(fix_trailing_commas,newline_fixed9,-1,0,"\\1",0,NULL);
+    g_regex_unref(fix_quoted_newlines);
+    g_regex_unref(fix_trailing_commas); 
+    printf("sending reply to %s\n",g_strndup(message->properties.reply_to.bytes,message->properties.reply_to.len));
+    amqp_bytes_t msgbytes;
+    msgbytes = amqp_cstring_bytes(commas_fixed);
+    die_on_error(amqp_basic_publish(conn, 1, amqp_cstring_bytes(""),message->properties.reply_to,0,0,NULL,msgbytes),"Failed to send message");
+    g_free(newline_fixed9);
+    g_free(commas_fixed);
+}
+
+int gameloop(amqp_connection_state_t pwq_conn,amqp_bytes_t *queue){
     printf("SERVER STARTING\n");
     //Setup For this function
     bool keepgoing = true;
     int i;
-    int j;
-    int xi,yi,bi;
 
     //Setup For SimonTPPC
     char * starterror = NULL;
@@ -507,7 +599,8 @@ int gameloop(void){
     gg = &thegame;
     fe = frontend_new();
 
-    me = midend_for_new_game(fe, gg, NULL, false, false, &starterror);
+    me = midend_new(fe, gg, &msg_drawing, fe);
+    midend_new_game(me);
     fe_set_midend(fe, me);
     
     if (!me) {
@@ -518,52 +611,116 @@ int gameloop(void){
 
     int x = INT_MAX;
     int y = INT_MAX; 
+    
+    //Setup For Drawing
     GQueue *drawhandle;
     config_item *cfg;
-    char **garbage;
+    char garbage[100];
+    char * drawstring;
+    char * gamestring;
+    char * respstring;
+
+    //Setup For Message Passing
+    amqp_rpc_reply_t pwq_res;
+    amqp_envelope_t env;
+    amqp_envelope_t *pwq_envelope = &env;
+    char * msg_text;
+    char ** msg_parts;
+
+    //Setup For Message construction
+    const char * cfg_set_error;
+
     while(keepgoing){
-        switch(getserverstate()){
+        amqp_maybe_release_buffers(pwq_conn);
+        pwq_res = 
+        pwq_res = amqp_consume_message(pwq_conn, pwq_envelope, NULL, 0);
+        amqp_basic_ack(pwq_conn,1,pwq_envelope->delivery_tag,false);
+        if(pwq_res.reply_type != AMQP_RESPONSE_NORMAL){
+            printf("errored %d\n",pwq_res.reply_type);
+            amqp_destroy_envelope(pwq_envelope);
+            continue;
+        }
+        msg_text = g_strndup((char *)(pwq_envelope->message.body.bytes),pwq_envelope->message.body.len);
+        printf("MSG: %s\n",msg_text);
+        msg_parts = g_strsplit(msg_text,"-",5); 
+        switch(getserverstate(&(pwq_envelope->message))){
             case SERVER_KILL: 
                 keepgoing = false;
+                send_reply(pwq_conn,&(pwq_envelope->message),"Adieu");
                 break;
             case SERVER_NEW_GAME:
+                printf("NEW GAME\n");
+                if(msg_parts[1] == NULL){
+                    send_reply(pwq_conn,&(pwq_envelope->message),"MALFORMED MSG");
+                    break;
+                }
+                cfg_set_error = set_cfg(me,msg_parts[1]);
                 midend_new_game(me);
+                drawstring = draw_string(me,fe,true);
+                gamestring = game_string(me);
+                respstring = g_strdup_printf("{\"draw\":%s,\n\"gamestate\":\"%s\"\n,}\n",drawstring,gamestring);
+                send_reply(pwq_conn,&(pwq_envelope->message),respstring);
+                g_free(drawstring);
+                g_free(gamestring);
+                g_free(respstring);
                 break;
             case SERVER_UPDATE_GAME:
-                scanf("x: %d, y: %d, button: %d\n",&xi,&yi,&bi);
-                midend_process_key(me,xi,yi,bi);
+                printf("UPDATE GAME\n");
+                if(msg_parts[1] == NULL || msg_parts[2] == NULL){
+                    send_reply(pwq_conn,&(pwq_envelope->message),"MALFORMED MSG");
+                    break;
+                }
+                load_game(me,&(msg_parts[1]));
+                process_key_string(me,msg_parts[2]);
+                drawstring = draw_string(me,fe,false); 
+                gamestring = game_string(me);
+                respstring = g_strdup_printf("{\"draw\":%s,\n\"gamestate\":\"%s\"\n,}\n",drawstring,gamestring);
+                send_reply(pwq_conn,&(pwq_envelope->message),respstring);
+                g_free(drawstring);
+                g_free(gamestring);
+                g_free(respstring);
                 break;
             case SERVER_REDRAW_GAME:
-                x = INT_MAX;
-                y = INT_MAX;
-                midend_size(me, &x, &y, false);
-                drawhandle = g_queue_new();
-                fe->dr = drawing_new(msg_drawing,me,drawinghandle);
-                g_queue_push_tail(drawhandle,"{draw:true,size: x: %d,\n y %d,\n discard:[{",x,y);
-                midend_force_redraw(me);
-                g_queue_push_tail(drawhandle,"}]}");
-                g_queue_free(drawhandle);
-                drawing_free(fe->dr);
+                printf("REDRAW GAME");
+                if(msg_parts[1] == NULL){
+                    send_reply(pwq_conn,&(pwq_envelope->message),"MALFORMED MSG");
+                    break;
+                }
+                load_game(me,&(msg_parts[1]));
+                drawstring = draw_string(me,fe,true); 
+                gamestring = game_string(me);
+                respstring = g_strdup_printf("{\"draw\":%s,\n\"gamestate\":\"%s\"\n,}\n",drawstring,gamestring);
+                send_reply(pwq_conn,&(pwq_envelope->message),respstring);
+                g_free(drawstring);
+                g_free(gamestring);
+                g_free(respstring);
                 break;
             case SERVER_GET_CONFIG:
-                cfg = midend_get_config(me,CFG_SETTINGS,garbage);
+                printf("GET_CONFIG\n");
+                cfg = midend_get_config(me,CFG_SETTINGS,(char **)&garbage);
                 drawhandle = g_queue_new();
-                g_queue_push_tail("{config:true,\nopts:[\n");
-                i=0;
-                while(cfg[i]->type != C_END){
-                    g_queue_push_tail(drawhandle,g_strdup_printf("{name:%s,\n",cfg[i]->name));
-                    if(cfg[i]->type == C_STRING){
-                        g_queue_push_tail(drawhandle,"type:string,\n");
-                    } else if(cfg[i]->type == C_BOOLEAN){
-                        g_queue_push_tail(drawhandle,"type:boolean,\n");
-                    } else if(cfg[i]->type == C_CHOICES){
-                        g_queue_push_tail(drawhandle,"type:choices,\n");
-                        g_queue_push_tail(drawhandle,g_strdup_printf("choices:%s,\n",cfg[i]->u.choices.choicenames));
+                g_queue_push_tail(drawhandle,g_strdup("{\"config\":true,\n\"opts\":[\n"));
+                if(cfg != NULL){
+                    i=0;
+                    while(cfg[i].type != C_END){
+                        g_queue_push_tail(drawhandle,g_strdup_printf("{\"name\":\"%s\",\n",cfg[i].name));
+                        if(cfg[i].type == C_STRING){
+                            g_queue_push_tail(drawhandle,g_strdup("\"type\":\"string\",\n"));
+                        } else if(cfg[i].type == C_BOOLEAN){
+                            g_queue_push_tail(drawhandle,g_strdup("\"type\":\"boolean\",\n"));
+                        } else if(cfg[i].type == C_CHOICES){
+                            g_queue_push_tail(drawhandle,g_strdup("\"type\":\"choices\",\n"));
+                            g_queue_push_tail(drawhandle,g_strdup_printf("\"choices\":\"%s\",\n",cfg[i].u.choices.choicenames));
+                        }
+                        g_queue_push_tail(drawhandle,g_strdup("},\n"));
+                        i++;
                     }
-                    g_queue_push_tail(drawhandle,"},\n");
                 }
-                g_queue_push_tail(drawhandle,"]}");
-                g_queue_free(drawhandle);
+                g_queue_push_tail(drawhandle,g_strdup("]}"));
+                drawstring = queue_to_str(drawhandle);
+                send_reply(pwq_conn,&(pwq_envelope->message),drawstring);
+                g_free(drawstring);
+                g_queue_free_full(drawhandle,g_free);
                 free_cfg(cfg);
                 break;
             case SERVER_ECHO:
@@ -573,61 +730,54 @@ int gameloop(void){
             default :
                 printf("SERVER ERROR\n");
         }
+        g_free(msg_text);
+        g_strfreev(msg_parts);
+        amqp_destroy_envelope(pwq_envelope);
     }
+     
+    midend_free(me);
+    sfree(fe);
+    die_on_amqp_error(amqp_channel_close(pwq_conn, 1, AMQP_REPLY_SUCCESS),
+                                 "Closing channel");
+    die_on_amqp_error(amqp_connection_close(pwq_conn, AMQP_REPLY_SUCCESS),
+                                   "Closing connection");
+    die_on_error(amqp_destroy_connection(pwq_conn), "Ending connection");
     return 0;
 }
+
 
 int main(int argc, char*argv[]){    
     //For Puzzle Work Queue
 	char const *pwq_hostname;
 	int pwq_port, pwq_status;
-	char const *pwq_queuename; 
+	char const *pwq_queuename;
+    amqp_bytes_t queue;
     char const *pwq_user, *pwq_pass;
     amqp_socket_t *pwq_socket = NULL;
 	amqp_connection_state_t pwq_conn;
-    //For Shutdown Queue
-	char const *adm_hostname;
-	int adm_port, adm_status;
-	char const *adm_queuename; 
-    char const *adm_user, *adm_pass;
-    amqp_socket_t *adm_socket = NULL;
-	amqp_connection_state_t adm_conn;
     //Handle Command Line Args
-    if(argc % 2 != 1 || argc < 13){
-        fprintf(stderr,"Usage requires the following tagged args: -pwq_host, -pwq_port, -pwq_queue and their adm counterparts");
-    } 
-    for(int i=1;i < argc;i+=2){
-        if(argv[i] == "-pwq_host"){
-		    pwq_hostname = argv[i+1];
+    if(argc % 2 != 1 || argc < 11){
+        fprintf(stderr,"Usage requires the following tagged args: -host, -port, -queue, -user, -pass\n");
+        return 1;
+    }
+   int i; 
+    for(i=1;i < argc;i+=2){
+	    if(g_str_equal(argv[i],"-host")){
+	        pwq_hostname = argv[i+1];
         }
-        if(argv[i] == "-pwq_port"){
+        if(g_str_equal(argv[i],"-port")){
             pwq_port = atoi(argv[i+1]);
         }
-        if(argv[i] == "-pwq_queue"){
+        if(g_str_equal(argv[i],"-queue")){
             pwq_queuename = argv[i+1];
         }
-        if(argv[i] == "-pwq_user"){
+        if(g_str_equal(argv[i],"-user")){
             pwq_user = argv[i+1];
         }
-        if(argv[i] == "-pwq_pass"){
+        if(g_str_equal(argv[i],"-pass")){
             pwq_pass = argv[i+1];
         }
-
-        if(argv[i] == "-adm_host"){
-		    adm_hostname = argv[i+1];
-        }
-        if(argv[i] == "-adm_port"){
-            adm_port = atoi(argv[i+1]);
-        }
-        if(argv[i] == "-adm_queue"){
-            adm_queuename = argv[i+1];
-        }
-        if(argv[i] == "-adm_user"){
-            adm_user = argv[i+1];
-        }
-        if(argv[i] == "-adm_pass"){
-            adm_pass = argv[i+1];
-        }
+	    printf("arg %d = %s, arg %d + 1 = %s\n",i,argv[i],i,argv[i+1]);
     }
     
     pwq_conn = amqp_new_connection();
@@ -635,41 +785,29 @@ int main(int argc, char*argv[]){
     if (!pwq_socket){
         die("creating PWQ TCP socket");
     }
-    pwq_status = ampq_socket_open(pwq_socket,pwq_hostname,pwq_port);
+    
+    pwq_status = amqp_socket_open(pwq_socket,pwq_hostname,pwq_port);
     if (pwq_status){
-        die("opening PWQ TCP socket");
+   	printf("pwq:status %d\n",pwq_status); 
+	    die("opening PWQ TCP socket");
     }
-
-    die_in_amqp_error(amqp_login(pwq_conn, "/", 0, 131072, 0,
+    
+    die_on_amqp_error(amqp_login(pwq_conn, "/", 0, 131072, 0,
                 AMQP_SASL_METHOD_PLAIN, pwq_user, pwq_pass),
             "Logging In to PWQ");
+    
     amqp_channel_open(pwq_conn, 1);
     die_on_amqp_error(amqp_get_rpc_reply(pwq_conn), "Opening PWQ channel");
-    amqp_basic_consume(conn, 1, amqp_cstring_bytes(pwq_queuename), amqp_empty_bytes,
+    
+    queue = amqp_cstring_bytes(pwq_queuename);
+    amqp_queue_declare(pwq_conn,1,amqp_cstring_bytes(pwq_queuename),0,0,0,0,amqp_empty_table);
+    die_on_amqp_error(amqp_get_rpc_reply(pwq_conn), "Declaring PWQ queue");
+
+    amqp_basic_consume(pwq_conn, 1, amqp_cstring_bytes(pwq_queuename), amqp_empty_bytes,
                                  0, 0, 0, amqp_empty_table);
     die_on_amqp_error(amqp_get_rpc_reply(pwq_conn), "Consuming PWQ");
 
-
-    adm_conn = amqp_new_connection();
-    adm_socket = amqp_tcp_socket_new(adm_conn);
-    if (!adm_socket){
-        die("creating PWQ TCP socket");
-    }
-    adm_status = ampq_socket_open(adm_socket,adm_hostname,adm_port);
-    if (adm_status){
-        die("opening PWQ TCP socket");
-    }
-
-    die_in_amqp_error(amqp_login(adm_conn, "/", 0, 131072, 0,
-                AMQP_SASL_METHOD_PLAIN, adm_user, adm_pass),
-            "Logging In to PWQ");
-    amqp_channel_open(adm_conn, 1);
-    die_on_amqp_error(amqp_get_rpc_reply(adm_conn), "Opening PWQ channel");
-    amqp_basic_consume(conn, 1, amqp_cstring_bytes(adm_queuename), amqp_empty_bytes,
-                                 0, 0, 0, amqp_empty_table);
-    die_on_amqp_error(amqp_get_rpc_reply(adm_conn), "Consuming PWQ");
-    
-    return gameloop(pwq_conn,adm_conn);
+    return gameloop(pwq_conn,&queue);
 }
 
 

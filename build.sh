@@ -22,7 +22,7 @@ for puzzle in puzzle_specific/*; do
     cp common_mine/* build/$puzzlename
     (
         cd build/$puzzlename
-        gcc *.c -lrabbitmq -lm `pkg-config --cflags --libs glib-2.0`
+        gcc -o "$(echo $puzzlename)_logic_server" *.c $CFLAGS -lrabbitmq -lm `pkg-config --cflags --libs glib-2.0` -g
     )
 done
 
