@@ -131,7 +131,7 @@ static void msg_draw_polygon(void *handle, int *coords, int npoints,
     int i = 0;
     int index = 0;
     index += sprintf(&str[index],"[%d,",coords[0]);
-    for(i=1;i<npoints;i++){
+    for(i=1;i<2*npoints;i++){
         index += sprintf(&str[index], ",%d", coords[i]);
     }
     index += sprintf(&str[index], "]");
@@ -482,7 +482,13 @@ char * game_string(midend* me){
     ctx.curr_size = 0;
     ctx.buffer = NULL;
     midend_serialise(me,write_to_str,&ctx);
-    char * out = g_strndup(ctx.buffer,ctx.curr_size);
+    char * rawgamestring = g_strndup(ctx.buffer,ctx.curr_size);
+    
+    GRegex * fix_newlines = g_regex_new("\\n",0,0,NULL); 
+    char * out = g_regex_replace_literal(fix_newlines,rawgamestring,-1,0,"\\\\n",0,NULL);
+
+    g_regex_unref(fix_newlines);
+    g_free(rawgamestring);
     free(ctx.buffer);
     return out;
 }
@@ -517,7 +523,7 @@ const char * set_cfg(midend *me,char * csopts){
     int i;
     i = 0;
     while(cfg[i].type != C_END){
-        if(!opts[i]){
+	if(!opts[i]){
             return "Not Enough Options";
         }
         switch(cfg[i].type){
@@ -531,7 +537,7 @@ const char * set_cfg(midend *me,char * csopts){
                 cfg[i].u.choices.selected = atoi(opts[i]);
                 break;
             default:
-                return "Something went horribly wrong in config-setting";
+		return "Something went horribly wrong in config-setting";
         }
         i++;
     }
@@ -550,36 +556,16 @@ void process_key_string(midend *me,char * keystring){
 }
 
 void send_reply(amqp_connection_state_t conn, amqp_message_t *message,char * msg){
-    GRegex * fix_quoted_newlines = g_regex_new("(\"[^\"\\n]*)\\r?\\n(?!(([^\"]*\"){2})*[^\"]*$)",0,0,NULL);
     GRegex * fix_trailing_commas = g_regex_new(",(\\s*[\\]}])",0,0,NULL);
-
-    char * newline_fixed0 = g_regex_replace(fix_quoted_newlines,msg,-1,0,"\\1\\\\n",0,NULL);
-    char * newline_fixed1 = g_regex_replace(fix_quoted_newlines,newline_fixed0,-1,0,"\\1\\\\n",0,NULL);
-    g_free(newline_fixed0);
-    char * newline_fixed2 = g_regex_replace(fix_quoted_newlines,newline_fixed1,-1,0,"\\1\\\\n",0,NULL);
-    g_free(newline_fixed1);
-    char * newline_fixed3 = g_regex_replace(fix_quoted_newlines,newline_fixed2,-1,0,"\\1\\\\n",0,NULL);
-    g_free(newline_fixed2);
-    char * newline_fixed4 = g_regex_replace(fix_quoted_newlines,newline_fixed3,-1,0,"\\1\\\\n",0,NULL);
-    g_free(newline_fixed3);
-    char * newline_fixed5 = g_regex_replace(fix_quoted_newlines,newline_fixed4,-1,0,"\\1\\\\n",0,NULL);
-    g_free(newline_fixed4);
-    char * newline_fixed6 = g_regex_replace(fix_quoted_newlines,newline_fixed5,-1,0,"\\1\\\\n",0,NULL);
-    g_free(newline_fixed5);
-    char * newline_fixed7 = g_regex_replace(fix_quoted_newlines,newline_fixed6,-1,0,"\\1\\\\n",0,NULL);
-    g_free(newline_fixed6);
-    char * newline_fixed8 = g_regex_replace(fix_quoted_newlines,newline_fixed7,-1,0,"\\1\\\\n",0,NULL);
-    g_free(newline_fixed7);
-    char * newline_fixed9 = g_regex_replace(fix_quoted_newlines,newline_fixed8,-1,0,"\\1\\\\n",0,NULL);
-    g_free(newline_fixed8);
-    char * commas_fixed = g_regex_replace(fix_trailing_commas,newline_fixed9,-1,0,"\\1",0,NULL);
-    g_regex_unref(fix_quoted_newlines);
+    struct amqp_basic_properties_t_ reply_properties;
+    reply_properties._flags = AMQP_BASIC_CORRELATION_ID_FLAG;
+    reply_properties.correlation_id = message->properties.correlation_id;
+    char * commas_fixed = g_regex_replace(fix_trailing_commas,msg,-1,0,"\\1",0,NULL);
     g_regex_unref(fix_trailing_commas); 
     printf("sending reply to %s\n",g_strndup(message->properties.reply_to.bytes,message->properties.reply_to.len));
     amqp_bytes_t msgbytes;
     msgbytes = amqp_cstring_bytes(commas_fixed);
-    die_on_error(amqp_basic_publish(conn, 1, amqp_cstring_bytes(""),message->properties.reply_to,0,0,NULL,msgbytes),"Failed to send message");
-    g_free(newline_fixed9);
+    die_on_error(amqp_basic_publish(conn, 1, amqp_cstring_bytes(""),message->properties.reply_to,0,0,&reply_properties,msgbytes),"Failed to send message");
     g_free(commas_fixed);
 }
 
@@ -655,7 +641,10 @@ int gameloop(amqp_connection_state_t pwq_conn,amqp_bytes_t *queue){
                     break;
                 }
                 cfg_set_error = set_cfg(me,msg_parts[1]);
-                midend_new_game(me);
+		if(cfg_set_error != NULL){
+			printf("cfg_set error: %s\n",cfg_set_error);
+		}
+		midend_new_game(me);
                 drawstring = draw_string(me,fe,true);
                 gamestring = game_string(me);
                 respstring = g_strdup_printf("{\"draw\":%s,\n\"gamestate\":\"%s\"\n,}\n",drawstring,gamestring);
