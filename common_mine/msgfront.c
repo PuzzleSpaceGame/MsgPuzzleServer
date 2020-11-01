@@ -57,13 +57,12 @@ void get_random_seed(void **randseed, int *randseedsize)
     ((uint64_t * )(*randseed))[0] = now_microseconds();
     *randseedsize = sizeof(uint64_t);
 }
-// TODO: Make an actual default color
 void frontend_default_colour(frontend *fe, float *output)
 {
     printf("frontend_default_colour\n");
-    output[0] = 0.1;
-    output[1] = 0.1;
-    output[2] = 0.1;
+    output[0] = 1.0;
+    output[1] = 1.0;
+    output[2] = 1.0;
 }
 void deactivate_timer(frontend *fe)
 {
@@ -75,10 +74,11 @@ void deactivate_timer(frontend *fe)
 
 void activate_timer(frontend *fe)
 {
+    printf("activate_timer\n");
     if (!fe)
 	return;			       /* for non-interactive midend */
     if (!fe->timer) {
-        printf("activate_timer\n");
+        return;
     }
 }
 static void msg_draw_text(void *handle, int x, int y, int fonttype,
@@ -130,7 +130,7 @@ static void msg_draw_polygon(void *handle, int *coords, int npoints,
     char str[128];
     int i = 0;
     int index = 0;
-    index += sprintf(&str[index],"[%d,",coords[0]);
+    index += sprintf(&str[index],"[%d",coords[0]);
     for(i=1;i<2*npoints;i++){
         index += sprintf(&str[index], ",%d", coords[i]);
     }
@@ -416,7 +416,10 @@ enum commands {
     SERVER_NEW_GAME,
     SERVER_REDRAW_GAME,
     SERVER_UPDATE_GAME,
+    SERVER_BATCH_UPDATE,
     SERVER_GET_CONFIG,
+    SERVER_GET_COLORS,
+    SERVER_GET_GAMEID,
     SERVER_ECHO
 };
 
@@ -436,6 +439,15 @@ int getserverstate(amqp_message_t *message){
     }
     if( str_is_prefixed("GETCFG",(char *)(message->body.bytes),6)){
         return SERVER_GET_CONFIG;
+    }
+    if( str_is_prefixed("BATCHX",(char *)(message->body.bytes),6)){
+    	return SERVER_BATCH_UPDATE;
+    }
+    if( str_is_prefixed("COLORS",(char *)(message->body.bytes),6)){
+    	return SERVER_GET_COLORS;
+    }
+    if( str_is_prefixed("GAMEID",(char *)(message->body.bytes),6)){
+    	return SERVER_GET_GAMEID;
     }
     printf("Malformed Message, Killing Server");
     return SERVER_KILL;
@@ -548,11 +560,17 @@ const char * set_cfg(midend *me,char * csopts){
     return out;
 }
 
-void process_key_string(midend *me,char * keystring){
+void process_key_string(midend *me,frontend *fe,char * keystring){
     char ** keyparts;
     int x,y,b;
     sscanf(keystring, "%d,%d,%d",&x,&y,&b);
+    int sx,sy;
+    sx = INT_MAX;
+    sy = INT_MAX;
+    midend_size(me,&sx,&sy,false);
+    fe->drawhandle = g_queue_new();
     midend_process_key(me,x,y,b);
+    g_queue_free_full(fe->drawhandle,g_free);
 }
 
 void send_reply(amqp_connection_state_t conn, amqp_message_t *message,char * msg){
@@ -601,6 +619,8 @@ int gameloop(amqp_connection_state_t pwq_conn,amqp_bytes_t *queue){
     //Setup For Drawing
     GQueue *drawhandle;
     config_item *cfg;
+    float * colors;
+    int ncolors;
     char garbage[100];
     char * drawstring;
     char * gamestring;
@@ -628,7 +648,7 @@ int gameloop(amqp_connection_state_t pwq_conn,amqp_bytes_t *queue){
         }
         msg_text = g_strndup((char *)(pwq_envelope->message.body.bytes),pwq_envelope->message.body.len);
         printf("MSG: %s\n",msg_text);
-        msg_parts = g_strsplit(msg_text,"-",5); 
+        msg_parts = g_strsplit(msg_text,"~",-1); 
         switch(getserverstate(&(pwq_envelope->message))){
             case SERVER_KILL: 
                 keepgoing = false;
@@ -643,6 +663,7 @@ int gameloop(amqp_connection_state_t pwq_conn,amqp_bytes_t *queue){
                 cfg_set_error = set_cfg(me,msg_parts[1]);
 		if(cfg_set_error != NULL){
 			printf("cfg_set error: %s\n",cfg_set_error);
+			break;
 		}
 		midend_new_game(me);
                 drawstring = draw_string(me,fe,true);
@@ -660,17 +681,51 @@ int gameloop(amqp_connection_state_t pwq_conn,amqp_bytes_t *queue){
                     break;
                 }
                 load_game(me,&(msg_parts[1]));
-                process_key_string(me,msg_parts[2]);
+                process_key_string(me,fe,msg_parts[2]);
                 drawstring = draw_string(me,fe,false); 
                 gamestring = game_string(me);
-                respstring = g_strdup_printf("{\"draw\":%s,\n\"gamestate\":\"%s\"\n,}\n",drawstring,gamestring);
+                respstring = g_strdup_printf("{\"draw\":%s,\n\"gamestate\":\"%s\"\n,\"status\":%d\n}\n",drawstring,gamestring,midend_status(me));
                 send_reply(pwq_conn,&(pwq_envelope->message),respstring);
                 g_free(drawstring);
                 g_free(gamestring);
                 g_free(respstring);
                 break;
+	    case SERVER_BATCH_UPDATE:
+		if(msg_parts[1] == NULL || msg_parts[2] == NULL){
+		    send_reply(pwq_conn,&(pwq_envelope->message),"MALFORMED MSG");
+		}
+                load_game(me,&(msg_parts[1]));
+		for(i = 0; i < atoi(msg_parts[2]); i++){
+		    if(!msg_parts[3+i]){
+		    	send_reply(pwq_conn,&(pwq_envelope->message),"MALFORMED MSG");
+		    }
+		    printf("handling: %s\n",msg_parts[3+i]);
+		    process_key_string(me,fe,msg_parts[3+i]);
+		    printf("finished handling\n");
+		}
+                drawstring = draw_string(me,fe,false); 
+                gamestring = game_string(me);
+                respstring = g_strdup_printf("{\"draw\":%s,\n\"gamestate\":\"%s\"\n,\"status\":%d\n}\n",drawstring,gamestring,midend_status(me));
+                send_reply(pwq_conn,&(pwq_envelope->message),respstring);
+                g_free(drawstring);
+                g_free(gamestring);
+                g_free(respstring);
+		break;
+	    case SERVER_GET_GAMEID:
+		printf("GET GAMEID\n");
+                if(msg_parts[1] == NULL){
+                    send_reply(pwq_conn,&(pwq_envelope->message),"MALFORMED MSG");
+                    break;
+                }
+                load_game(me,&(msg_parts[1]));
+                drawstring = midend_get_game_id(me);
+                respstring = g_strdup_printf("{\"game_id\":\"%s\"}\n",drawstring);
+		send_reply(pwq_conn,&(pwq_envelope->message),respstring);
+		g_free(respstring);
+		free(drawstring);
+		break;
             case SERVER_REDRAW_GAME:
-                printf("REDRAW GAME");
+                printf("REDRAW GAME\n");
                 if(msg_parts[1] == NULL){
                     send_reply(pwq_conn,&(pwq_envelope->message),"MALFORMED MSG");
                     break;
@@ -678,7 +733,7 @@ int gameloop(amqp_connection_state_t pwq_conn,amqp_bytes_t *queue){
                 load_game(me,&(msg_parts[1]));
                 drawstring = draw_string(me,fe,true); 
                 gamestring = game_string(me);
-                respstring = g_strdup_printf("{\"draw\":%s,\n\"gamestate\":\"%s\"\n,}\n",drawstring,gamestring);
+                respstring = g_strdup_printf("{\"draw\":%s,\n\"gamestate\":\"%s\"\n,\"status\":%d\n}\n",drawstring,gamestring,midend_status(me));
                 send_reply(pwq_conn,&(pwq_envelope->message),respstring);
                 g_free(drawstring);
                 g_free(gamestring);
@@ -692,7 +747,9 @@ int gameloop(amqp_connection_state_t pwq_conn,amqp_bytes_t *queue){
                 if(cfg != NULL){
                     i=0;
                     while(cfg[i].type != C_END){
-                        g_queue_push_tail(drawhandle,g_strdup_printf("{\"name\":\"%s\",\n",cfg[i].name));
+                        drawstring = g_strescape(cfg[i].name,"");
+			g_queue_push_tail(drawhandle,g_strdup_printf("{\"name\":\"%s\",\n",drawstring));
+			g_free(drawstring);
                         if(cfg[i].type == C_STRING){
                             g_queue_push_tail(drawhandle,g_strdup("\"type\":\"string\",\n"));
                         } else if(cfg[i].type == C_BOOLEAN){
@@ -715,6 +772,21 @@ int gameloop(amqp_connection_state_t pwq_conn,amqp_bytes_t *queue){
             case SERVER_ECHO:
                 printf("ECHO\n");
                 break;
+	    case SERVER_GET_COLORS:
+		colors = midend_colours(me,&ncolors);
+		drawhandle = g_queue_new();
+		g_queue_push_tail(drawhandle,g_strdup("{\"colours\":[\n"));
+		for(i = 0; i < ncolors; i++){
+			if(i){
+                		g_queue_push_tail(drawhandle,g_strdup(",\n"));
+			}
+			g_queue_push_tail(drawhandle,g_strdup_printf("{\"r\":%f,\"g\":%f,\"b\":%f}",colors[3*i],colors[3*i+1],colors[3*i+2]));
+		}
+		g_queue_push_tail(drawhandle,g_strdup("]}"));
+                drawstring = queue_to_str(drawhandle);
+                send_reply(pwq_conn,&(pwq_envelope->message),drawstring);
+                g_free(drawstring);
+                g_queue_free_full(drawhandle,g_free);
             case SERVER_ERROR:
             default :
                 printf("SERVER ERROR\n");
