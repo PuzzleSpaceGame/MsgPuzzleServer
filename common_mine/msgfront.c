@@ -420,11 +420,15 @@ enum commands {
     SERVER_GET_CONFIG,
     SERVER_GET_COLORS,
     SERVER_GET_GAMEID,
-    SERVER_ECHO
+    SERVER_ECHO,
+    SERVER_PING
 };
 
 int getserverstate(amqp_message_t *message){
-    //TODO get message and decide on what state to be in
+    // get message and decide on what state to be in
+    if( str_is_prefixed("PINGXX",(char *)(message->body.bytes),6)){
+        return SERVER_PING;
+    }
     if( str_is_prefixed("NEWXXX",(char *)(message->body.bytes),6)){
         return SERVER_NEW_GAME;
     }
@@ -654,6 +658,8 @@ int gameloop(amqp_connection_state_t pwq_conn,amqp_bytes_t *queue){
                 keepgoing = false;
                 send_reply(pwq_conn,&(pwq_envelope->message),"Adieu");
                 break;
+	    case SERVER_PING:
+                send_reply(pwq_conn,&(pwq_envelope->message),"PONG");
             case SERVER_NEW_GAME:
                 printf("NEW GAME\n");
                 if(msg_parts[1] == NULL){
