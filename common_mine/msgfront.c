@@ -476,7 +476,8 @@ bool read_from_string(void * vctx, void * buf, int len){
 void load_game(midend * me,char ** game_str){
     int x,y;
     struct str_read_ctx ctx;
-    char * unescaped = g_strcompress(*game_str);
+    GRegex * unescape_newline = g_regex_new("\\\\n",0,0,NULL);
+    char * unescaped = g_regex_replace_literal(unescape_newline,*game_str,-1,0,"\n",0,NULL);
     ctx.pos = 0;
     ctx.str = &unescaped;
     midend_deserialise(me,read_from_string,&ctx);
