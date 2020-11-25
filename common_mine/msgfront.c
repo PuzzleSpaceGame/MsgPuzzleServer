@@ -453,6 +453,9 @@ int getserverstate(amqp_message_t *message){
     if( str_is_prefixed("GAMEID",(char *)(message->body.bytes),6)){
     	return SERVER_GET_GAMEID;
     }
+    if( str_is_prefixed("ECHOXX",(char *)(message->body.bytes),6)){
+    	return SERVER_ECHO;
+    }
     printf("Malformed Message, Killing Server");
     return SERVER_KILL;
 }
@@ -473,8 +476,9 @@ bool read_from_string(void * vctx, void * buf, int len){
 void load_game(midend * me,char ** game_str){
     int x,y;
     struct str_read_ctx ctx;
+    char * unescaped = g_strcompress(*game_str);
     ctx.pos = 0;
-    ctx.str = game_str;
+    ctx.str = &unescaped;
     midend_deserialise(me,read_from_string,&ctx);
     x = INT_MAX;
     y = INT_MAX;
@@ -700,7 +704,9 @@ int gameloop(amqp_connection_state_t pwq_conn,amqp_bytes_t *queue){
 		if(msg_parts[1] == NULL || msg_parts[2] == NULL){
 		    send_reply(pwq_conn,&(pwq_envelope->message),"MALFORMED MSG");
 		}
+                printf("bugid1: %s\n",midend_get_game_id(me));
                 load_game(me,&(msg_parts[1]));
+                printf("bugid2: %s\n",midend_get_game_id(me));
 		for(i = 0; i < atoi(msg_parts[2]); i++){
 		    if(!msg_parts[3+i]){
 		    	send_reply(pwq_conn,&(pwq_envelope->message),"MALFORMED MSG");
@@ -736,11 +742,11 @@ int gameloop(amqp_connection_state_t pwq_conn,amqp_bytes_t *queue){
                     send_reply(pwq_conn,&(pwq_envelope->message),"MALFORMED MSG");
                     break;
                 }
-                load_game(me,&(msg_parts[1]));
+		load_game(me,&(msg_parts[1]));
                 drawstring = draw_string(me,fe,true); 
                 gamestring = game_string(me);
                 respstring = g_strdup_printf("{\"draw\":%s,\n\"gamestate\":\"%s\"\n,\"status\":%d\n}\n",drawstring,gamestring,midend_status(me));
-                send_reply(pwq_conn,&(pwq_envelope->message),respstring);
+		send_reply(pwq_conn,&(pwq_envelope->message),respstring);
                 g_free(drawstring);
                 g_free(gamestring);
                 g_free(respstring);
@@ -776,7 +782,8 @@ int gameloop(amqp_connection_state_t pwq_conn,amqp_bytes_t *queue){
                 free_cfg(cfg);
                 break;
             case SERVER_ECHO:
-                printf("ECHO\n");
+		printf("ECHOING: %s",msg_parts[1]);
+                send_reply(pwq_conn,&(pwq_envelope->message),msg_parts[1]);
                 break;
 	    case SERVER_GET_COLORS:
 		colors = midend_colours(me,&ncolors);
