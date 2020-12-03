@@ -585,8 +585,9 @@ void process_key_string(midend *me,frontend *fe,char * keystring){
 void send_reply(amqp_connection_state_t conn, amqp_message_t *message,char * msg){
     GRegex * fix_trailing_commas = g_regex_new(",(\\s*[\\]}])",0,0,NULL);
     struct amqp_basic_properties_t_ reply_properties;
-    reply_properties._flags = AMQP_BASIC_CORRELATION_ID_FLAG;
+    reply_properties._flags = AMQP_BASIC_CORRELATION_ID_FLAG | AMQP_BASIC_EXPIRATION_FLAG;
     reply_properties.correlation_id = message->properties.correlation_id;
+    reply_properties.expiration = amqp_cstring_bytes("5000");
     char * commas_fixed = g_regex_replace(fix_trailing_commas,msg,-1,0,"\\1",0,NULL);
     g_regex_unref(fix_trailing_commas); 
     printf("sending reply to %s\n",g_strndup(message->properties.reply_to.bytes,message->properties.reply_to.len));
